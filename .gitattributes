@@ -1,0 +1,36 @@
+# Keep Unity's YAML-serialized assets diffable in GitHub.
+*.asset text
+*.controller text
+*.inputactions text
+*.mat text
+*.meta text
+*.prefab text
+*.renderTexture text
+*.scenetemplate text
+*.shader text
+*.shadergraph text
+*.unity text
+*.url text
+*.json text
+*.txt text
+*.cs text
+
+# Treat binary source assets and ignored Unity package archives as binary.
+*.app binary
+*.bmp binary
+*.fbx binary
+*.gif binary
+*.jpg binary
+*.jpeg binary
+*.mp3 binary
+*.mp4 binary
+*.ogg binary
+*.package binary
+*.png binary
+*.psd binary
+*.tga binary
+*.tif binary
+*.tiff binary
+*.ttf binary
+*.unitypackage binary
+*.wav binary
