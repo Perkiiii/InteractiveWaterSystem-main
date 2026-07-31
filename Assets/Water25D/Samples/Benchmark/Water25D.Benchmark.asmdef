@@ -1,0 +1,16 @@
+{
+  "name": "Water25D.Benchmark",
+  "rootNamespace": "Water25D.Samples.Benchmark",
+  "references": [
+    "Water25D.Runtime"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -10,7 +10,7 @@ This repository contains two existing water implementations used as references:
 The goal is to build a new, modular, production-oriented, and self-contained water package under:
 
 ```text
-Assets/Water2_5D/
+Assets/Water25D/
 ```
 
 The completed package must be movable into another compatible Unity project without requiring the original custom water implementation, Cainos assets, demo scenes, Lucid Editor, or Unity MCP.
@@ -26,7 +26,7 @@ Use the following precedence when information conflicts:
 1. The current user task.
 2. This `AGENTS.md`.
 3. `Assets/Docs/IMPLEMENTATION_PLAN.md` for architectural intent and milestone order.
-4. `Assets/Water2_5D/Documentation/STATUS.md`, once it exists, for completed and active milestones.
+4. `Assets/Water25D/Documentation/STATUS.md`, once it exists, for completed and active milestones.
 5. Actual repository code and serialized project settings for current implementation state.
 6. README files and older explanatory documentation.
 
@@ -58,7 +58,7 @@ Assets/
 │   └── Interactive Pixel Water/
 ├── DemoScenes/
 ├── Settings/
-└── Water2_5D/                     Target package root
+└── Water25D/                      Target package root
     ├── Runtime/
     │   ├── Core/
     │   ├── Simulation/
@@ -81,7 +81,7 @@ ProjectSettings/
 THIRD_PARTY_NOTICES.md
 ```
 
-The `Assets/Water2_5D/` structure is the intended destination. Do not create every directory pre-emptively; create directories only when the current implementation phase needs them.
+The `Assets/Water25D/` structure is the intended destination. Do not create every directory pre-emptively; create directories only when the current implementation phase needs them.
 
 ---
 
@@ -104,13 +104,13 @@ Do not casually refactor, rename, move, reserialize, or retune assets in these f
 New production implementation belongs under:
 
 ```text
-Assets/Water2_5D/
+Assets/Water25D/
 ```
 
 Package-owned code must use the namespace:
 
 ```csharp
-Water2_5D
+Water25D
 ```
 
 unless an existing package-owned file establishes a more specific nested namespace.
@@ -186,7 +186,7 @@ After implementation:
 2. Remove accidental serialized changes.
 3. Run all available relevant validation.
 4. Update package documentation when behaviour or architecture changed.
-5. Update `Assets/Water2_5D/Documentation/STATUS.md` only when the task actually advances or completes a milestone.
+5. Update `Assets/Water25D/Documentation/STATUS.md` only when the task actually advances or completes a milestone.
 6. Provide the required handoff described below.
 
 If the package status document does not yet exist, create it only when the task establishes the package root or begins implementation tracking. Do not claim milestones were completed before they were verified.
@@ -263,7 +263,7 @@ Do not introduce GPU-to-CPU height readback as the default gameplay solution.
 
 Keep responsibilities separated:
 
-* `Water2_5DController` coordinates modules.
+* `Water25DController` coordinates modules.
 * `WaterMeshBuilder` owns geometry generation.
 * `WaterRuntimeResources` owns generated resources and disposal.
 * `IWaterRippleSimulator` defines the simulation contract.
@@ -495,7 +495,7 @@ Do not hand-edit Shader Graph serialization to perform an ordinary shader-code c
 
 Treat `Assets/Cainos/` as vendor content.
 
-Do not copy, redistribute, rename, or incorporate Cainos code or assets into `Assets/Water2_5D/`.
+Do not copy, redistribute, rename, or incorporate Cainos code or assets into `Assets/Water25D/`.
 
 Cainos may be inspected for behavioural ideas such as:
 
@@ -533,13 +533,13 @@ Inspect the complete diff for:
 * Scene or prefab reserialization.
 * Changed GUIDs.
 * Modified vendor content.
-* References from `Assets/Water2_5D/` into reference-only directories.
+* References from `Assets/Water25D/` into reference-only directories.
 * Generated Unity files that should not be committed.
 
 Search package-owned runtime and editor code for unintended reference-system dependencies:
 
 ```bash
-rg -n "Cainos|InteractiveWaterSystem|DemoScenes|Lucid" Assets/Water2_5D
+rg -n "Cainos|InteractiveWaterSystem|DemoScenes|Lucid" Assets/Water25D
 ```
 
 Explain every intentional result. Documentation and explicitly temporary migration adapters may be valid exceptions.
@@ -708,7 +708,7 @@ A task is complete only when:
 
 * Its requested scope is implemented.
 * The change follows the active implementation phase.
-* Package-owned files are under `Assets/Water2_5D/`, except documented project-level changes.
+* Package-owned files are under `Assets/Water25D/`, except documented project-level changes.
 * No unintended dependency on a baseline or vendor system was introduced.
 * Mutable runtime resources have explicit ownership and cleanup.
 * Shared project assets are not mutated unintentionally.
