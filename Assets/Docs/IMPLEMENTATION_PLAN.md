@@ -1,10 +1,142 @@
 # Technical Review and Implementation Plan for an Improved Unity 2.5D Water System
 
+> **Document status:** Architectural plan and implementation roadmap. This file describes the intended destination, delivery order, and acceptance criteria. It does not record current implementation progress.
+
+## Document role
+
+This document defines the target architecture, implementation phases, validation strategy, migration approach, and release criteria for a new self-contained water package under:
+
+```text
+Assets/Water25D/
+```
+
+The new package is developed inside the same Unity project as the two reference systems, but it must not become permanently dependent on either of them. The existing custom water and Cainos water remain preserved as baselines and behavioural references until migration and comparison work is complete.
+
+Implementation progress is tracked separately in:
+
+```text
+Assets/Water25D/Documentation/STATUS.md
+```
+
+Create that status file when Phase 0 begins. Do not use this implementation plan as a task log, checklist of claimed completions, or substitute for validation evidence.
+
+Performance numbers in this document are analytical estimates unless explicitly identified as measurements captured with Unity profiling tools.
+
+## Naming convention
+
+Use **2.5D Water** as the human-facing product and feature name. Use **`Water25D`** as the single technical identifier everywhere a dot would be invalid, awkward, or inconsistent.
+
+| Context | Required name |
+|---|---|
+| Product or feature name in prose | `2.5D Water` |
+| Package root | `Assets/Water25D/` |
+| Root namespace | `Water25D` |
+| Runtime assembly | `Water25D.Runtime` |
+| Editor assembly | `Water25D.Editor` |
+| EditMode test assembly | `Water25D.Tests.EditMode` |
+| PlayMode test assembly | `Water25D.Tests.PlayMode` |
+| Primary component | `Water25DController` |
+| Custom Inspector | `Water25DEditor` |
+| Root prefab or authored hierarchy name | `Water25D` |
+
+Naming rules:
+
+- Do not introduce alternate technical spellings of the package name.
+- Keep ordinary module names concise where the package context is already clear, such as `WaterMeshBuilder`, `WaterRuntimeResources`, `WaterReflectionManager`, and `WaterStyleProfile`.
+- Use the `Water25D` prefix where package identity, assembly identity, a primary public type, or collision avoidance benefits from it.
+- New runtime code belongs in the `Water25D` namespace or a nested namespace such as `Water25D.Simulation`, `Water25D.Physics`, `Water25D.Rendering`, `Water25D.FX`, or `Water25D.Settings`.
+- Editor code belongs in `Water25D.Editor` or a nested editor namespace.
+- Repository documentation, `AGENTS.md`, assembly definitions, test names, sample names, status files, and migration instructions must use the same technical identifier.
+- Renaming an already serialized Unity type later can break component references. Finalize these names before Phase 1 creates authored prefabs or scenes.
+
+## Sources of truth and maintenance rules
+
+When information conflicts, use the following precedence:
+
+1. The current implementation task.
+2. The repository root `AGENTS.md`.
+3. This implementation plan for architectural intent and phase order.
+4. `Assets/Water25D/Documentation/STATUS.md` for completed work, active phase, known issues, and temporary dependencies.
+5. Actual repository code and serialized project settings for current implementation state.
+6. README files and older explanatory documentation.
+
+The following files are authoritative for environment versions:
+
+```text
+ProjectSettings/ProjectVersion.txt
+Packages/manifest.json
+Packages/packages-lock.json
+```
+
+Do not hard-code Unity, URP, Input System, Test Framework, or other package version numbers into this plan. Read the installed versions from those files whenever compatibility matters.
+
+Update this plan only when architecture, phase order, public contracts, acceptance criteria, or package boundaries change. Routine implementation progress belongs in `STATUS.md`.
+
+### Repository evidence map
+
+The principal reference files are:
+
+```text
+Assets/InteractiveWaterSystem/Scripts/InteractiveWater.cs
+Assets/InteractiveWaterSystem/Scripts/SimplePlanarReflection.cs
+Assets/InteractiveWaterSystem/ArtAssets/Shaders/Water/
+Assets/InteractiveWaterSystem/ArtAssets/Materials/Water/
+Assets/Cainos/Interactive Pixel Water/Script/PixelWater.cs
+Assets/Cainos/Interactive Pixel Water/Script/PixelWaterBubble.cs
+Assets/Cainos/Interactive Pixel Water/Script/PixelWaterSplash.cs
+Assets/Cainos/Interactive Pixel Water/Editor/PixelWaterEditor.cs
+Assets/Settings/Renderer2D.asset
+Assets/Settings/UniversalRP.asset
+ProjectSettings/EditorBuildSettings.asset
+ProjectSettings/ProjectVersion.txt
+Packages/manifest.json
+THIRD_PARTY_NOTICES.md
+```
+
+The exact filenames present in the repository remain the source of truth. If a listed path changes, update this evidence map and the relevant migration instructions.
+
+## Scope, boundaries, and non-goals
+
+### In scope
+
+- Preserve the custom system's XZ top surface and XY front-water presentation.
+- Build a project-owned modular runtime, editor, simulation, physics, reflection, interaction, FX, profile, migration, and validation framework.
+- Keep visual GPU ripple simulation separate from flat 2D gameplay buoyancy.
+- Provide a production path that scales across multiple water bodies and quality tiers.
+- Make the result self-contained enough to move into another compatible Unity project with documented setup steps.
+- Preserve the reference systems until the new package passes comparison, migration, and acceptance tests.
+
+### Out of scope unless explicitly approved
+
+- Combining the custom controller and Cainos controller into one inherited or partially copied class.
+- Copying Cainos scripts, shaders, textures, prefabs, particle systems, editor tooling, or other vendor content into `Assets/Water25D/`.
+- Rewriting the entire system in one change.
+- Making the compute backend the first production implementation.
+- Using GPU-to-CPU height readback as the default gameplay buoyancy model.
+- Requiring Unity MCP, Lucid Editor, demo-scene assets, or either reference system at package runtime.
+- Deleting or destructively converting the original prefabs before migration acceptance.
+- Claiming profiler, rendering, compilation, or test results that were not actually produced.
+
+### Package independence target
+
+The completed `Assets/Water25D/` tree must not contain permanent C# references, serialized GUID references, shader dependencies, material dependencies, prefab dependencies, or hard-coded asset paths into:
+
+```text
+Assets/InteractiveWaterSystem/
+Assets/Cainos/
+Assets/DemoScenes/
+Assets/Cainos/Third Party/Lucid Editor/
+```
+
+Temporary migration or comparison adapters are allowed only when the active task explicitly requires them. Record each temporary dependency in `STATUS.md`, explain why it exists, and state the phase in which it will be removed.
+
+Project-level settings such as layers, sorting layers, renderer configuration, or Camera Sorting Layer Texture setup may still be required. Those requirements must be validated and documented rather than silently assumed.
+
 ## Executive assessment and architecture map
 
-This report answers the attached research brief by reviewing the custom and Cainos water implementations in `Perkiiii/InteractiveWaterSystem-main`, analysing their likely performance characteristics, and proposing a production-oriented hybrid for a Unity 6 URP side-view game. fileciteturn0file0
+This plan reviews the custom and Cainos water implementations in `Perkiiii/InteractiveWaterSystem-main`, analyses their likely performance characteristics, and defines a production-oriented hybrid for a Unity 6 URP side-view game.
 
-The repository targets Unity `6000.0.23f1` with URP `17.0.3`. Its custom water is built around two generated meshes, two Custom Render Textures, Shader Graph materials, a 2D surface trigger, and a manually rendered reflection camera. The Cainos package is a separate CPU spring-water implementation with a substantially more mature authoring, physics, interaction, and FX layer. fileciteturn20file0 fileciteturn21file0 fileciteturn37file0
+The custom water is built around two generated meshes, two Custom Render Textures, Shader Graph materials, a surface interaction trigger, and a manually rendered reflection camera. The Cainos package is a separate CPU spring-water implementation with a substantially more mature authoring, physics, interaction, and FX layer.
 
 The central recommendation is:
 
@@ -13,8 +145,8 @@ The central recommendation is:
 The best target architecture is:
 
 ```text
-Water2_5D
-├── Water2_5DController
+Water25D
+├── Water25DController
 ├── TopSurface
 │   ├── MeshFilter
 │   ├── MeshRenderer
@@ -72,7 +204,7 @@ Full underwater trigger
     controls buoyancy, drag, bubbles and submerged state
 ```
 
-This decoupling avoids GPU-to-CPU readback, preserves responsive 2D physics, and prevents visual resolution from determining gameplay behaviour. Unity’s `BuoyancyEffector2D` already exposes a flat surface level, density, flow, linear drag, angular drag and collider filtering, making it appropriate for a side-view game whose actual physics remain two-dimensional. citeturn3search0
+This decoupling avoids GPU-to-CPU readback, preserves responsive 2D physics, and prevents visual resolution from determining gameplay behaviour. Unity’s `BuoyancyEffector2D` already exposes a flat surface level, density, flow, linear drag, angular drag and collider filtering, making it appropriate for a side-view game whose actual physics remain two-dimensional.
 
 ### Recommended implementation decision
 
@@ -94,6 +226,24 @@ This decoupling avoids GPU-to-CPU readback, preserves responsive 2D physics, and
 
 The expected result is not merely “the existing 2.5D water with buoyancy added”. It is a small water framework in which simulation quality, reflection quality, physics, visuals and authoring are independently controllable.
 
+### Package portability criteria
+
+A package candidate is not considered self-contained merely because all new scripts are under one folder. It must also satisfy these conditions:
+
+- Runtime and editor assemblies compile without either reference water system present.
+- Package prefabs, profiles, materials, shaders, and samples resolve only package-owned or explicitly documented Unity-package dependencies.
+- Runtime-generated meshes, materials, render textures, buffers, cameras, and helper objects have explicit owners and cleanup paths.
+- Required layers, sorting layers, renderer settings, and quality settings are detected or clearly documented.
+- A clean compatible Unity project can import the package and run its sample or validation scene after following the documented setup steps.
+- Removing `Assets/InteractiveWaterSystem/` and `Assets/Cainos/` from a test copy does not break package compilation or package-owned serialized references.
+- No package feature depends on Unity MCP being installed or connected.
+
+### Architectural decision discipline
+
+The class names and paths in this plan are architectural defaults. Change them only when an actual repository or Unity constraint justifies the change. Record any deliberate deviation in `STATUS.md`, including the reason, affected public contract, and migration consequence.
+
+Do not silently replace an approved design with a different pattern because it is easier to implement in one task.
+
 ## Repository audit and performance hotspot analysis
 
 ### Current custom water structure
@@ -110,9 +260,9 @@ The expected result is not merely “the existing 2.5D water with buoyancy added
 - Impact queueing.
 - Ripple simulation updates.
 - Material dimension updates.
-- Trigger interaction. fileciteturn4file0
+- Trigger interaction.
 
-The default top surface is 20 by 6.5 world units and uses a 200 by 130 grid. That creates 26,000 vertices and 51,342 triangles before any shader displacement. The front panel uses only two rows, so its geometry cost is comparatively small. fileciteturn4file0 citeturn8calculator0turn8calculator1
+The default top surface is 20 by 6.5 world units and uses a 200 by 130 grid. That creates 26,000 vertices and 51,342 triangles before any shader displacement. The front panel uses only two rows, so its geometry cost is comparatively small.
 
 The controller’s physics tick does the following:
 
@@ -123,7 +273,7 @@ _rippleSimulationTexture.Update(
     _rippleSimulationIterationPerFrame);
 ```
 
-The default iteration count is five, and the project’s fixed timestep is `0.02` seconds, meaning 50 physics updates per second. Only one queued ripple is removed and inserted during each physics tick. fileciteturn4file0 fileciteturn38file0
+The default iteration count is five, and the project’s fixed timestep is `0.02` seconds, meaning 50 physics updates per second. Only one queued ripple is removed and inserted during each physics tick.
 
 ### Ripple-solver workload
 
@@ -135,9 +285,9 @@ The ripple texture is currently:
 - Bilinearly filtered.
 - Mipmapped.
 - Configured to generate mipmaps.
-- Updated on demand. fileciteturn11file0 fileciteturn40file0
+- Updated on demand.
 
-The propagation shader samples the current texel and four direct neighbours. It stores the new height in red and the prior height in green, thereby implementing a second-order finite-difference wave solver. fileciteturn8file0
+The propagation shader samples the current texel and four direct neighbours. It stores the new height in red and the prior height in green, thereby implementing a second-order finite-difference wave solver.
 
 At the repository defaults, the analytical workload is approximately:
 
@@ -148,13 +298,13 @@ At the repository defaults, the analytical workload is approximately:
 = 262,144,000 propagated texels per second
 ```
 
-Because each propagated texel performs approximately five state-texture reads, the solver requests roughly 1.31 billion state samples per second before counting impact passes, double-buffer operations, mip generation, top/front rendering or reflection work. These are workload counts rather than measured GPU milliseconds; actual cost depends heavily on GPU architecture, bandwidth, driver and Unity’s scheduling. citeturn8calculator2turn8calculator3
+Because each propagated texel performs approximately five state-texture reads, the solver requests roughly 1.31 billion state samples per second before counting impact passes, double-buffer operations, mip generation, top/front rendering or reflection work. These are workload counts rather than measured GPU milliseconds; actual cost depends heavily on GPU architecture, bandwidth, driver and Unity’s scheduling.
 
 This is disproportionate for a 20 by 6.5 world-unit surface. The texture has more than one million cells while the visible mesh has only 26,000 vertices, so much of the simulated detail cannot become geometric detail on the top plane.
 
 ### Current memory footprint
 
-The ripple and ambient textures both use graphics format 48, which Unity defines as four 16-bit floating-point channels: eight bytes per texel. The ripple solver only needs two channels for its current and previous heights. fileciteturn11file0 fileciteturn12file0 fileciteturn40file0
+The ripple and ambient textures both use graphics format 48, which Unity defines as four 16-bit floating-point channels: eight bytes per texel. The ripple solver only needs two channels for its current and previous heights.
 
 Approximate persistent texture memory is:
 
@@ -166,9 +316,9 @@ Approximate persistent texture memory is:
 | 960 × 540 RGBA8 reflection plus D16 depth | 3.0 MiB |
 | Combined listed texture state | About 35 MiB |
 
-These figures assume a complete conventional mip chain and exclude alignment, driver overhead, temporary render targets and any internal copy resources. The committed formats and dimensions support the estimate, but the Unity Memory Profiler should be treated as the source of truth on each target platform. fileciteturn11file0 fileciteturn12file0 fileciteturn35file0 fileciteturn40file0 citeturn9calculator0turn9calculator1turn9calculator2turn9calculator3
+These figures assume a complete conventional mip chain and exclude alignment, driver overhead, temporary render targets and any internal copy resources. The committed formats and dimensions support the estimate, but the Unity Memory Profiler should be treated as the source of truth on each target platform.
 
-A 256 × 128 two-channel half-float ping-pong simulation without mipmaps would require approximately 0.25 MiB. That is roughly a 98.8% reduction compared with the current mipmapped, double-buffered RGBA-half ripple allocation. citeturn9calculator4turn9calculator5
+A 256 × 128 two-channel half-float ping-pong simulation without mipmaps would require approximately 0.25 MiB. That is roughly a 98.8% reduction compared with the current mipmapped, double-buffered RGBA-half ripple allocation.
 
 ### Double-buffering and update zones
 
@@ -177,9 +327,9 @@ The controller adds two zones when a ripple is available:
 - A full-texture propagation zone.
 - A 1% × 1% impact zone.
 
-Both specify `needSwap = true`. fileciteturn4file0
+Both specify `needSwap = true`.
 
-Unity documents that a Custom Render Texture update zone can request a buffer swap before the following zone, and that double-buffered Custom Render Textures can incur a texture copy on each swap. Unity explicitly warns that the cost becomes significant with high resolutions and frequent updates. citeturn2search0turn2search4turn2search10
+Unity documents that a Custom Render Texture update zone can request a buffer swap before the following zone, and that double-buffered Custom Render Textures can incur a texture copy on each swap. Unity explicitly warns that the cost becomes significant with high resolutions and frequent updates.
 
 Therefore, the current configuration is a serious profiling target. It should not be stated without measurement that Unity performs a particular exact number of full copies per fixed tick, because Custom Render Texture scheduling and repeated `Update(count)` calls can produce implementation-dependent command ordering. What can be stated confidently is that:
 
@@ -188,11 +338,11 @@ Therefore, the current configuration is a serious profiling target. It should no
 3. The texture is large and updated frequently.
 4. Unity warns that double-buffer swaps can copy full texture content.
 
-The Frame Debugger and Render Graph diagnostics should be used to count the actual update draws and copy operations in a player-equivalent configuration. Unity’s Frame Debugger exposes individual rendering events and URP’s Render Graph diagnostics can reveal generated passes and resources. citeturn7search9turn7search10
+The Frame Debugger and Render Graph diagnostics should be used to count the actual update draws and copy operations in a player-equivalent configuration. Unity’s Frame Debugger exposes individual rendering events and URP’s Render Graph diagnostics can reveal generated passes and resources.
 
 ### Mipmaps provide little value here
 
-Generated mipmaps are not needed by the propagation equation. It samples direct neighbours one base-level texel away, so lower-resolution mip levels do not contribute to the simulation. Unity regenerates mipmaps for mipmapped render textures when automatic mip generation is enabled, adding work after rendering. fileciteturn8file0 fileciteturn11file0 citeturn2search12
+Generated mipmaps are not needed by the propagation equation. It samples direct neighbours one base-level texel away, so lower-resolution mip levels do not contribute to the simulation. Unity regenerates mipmaps for mipmapped render textures when automatic mip generation is enabled, adding work after rendering.
 
 Mipmaps could theoretically help when a presentation shader samples a heavily minified height texture, but that does not justify regenerating an entire state-texture mip chain after every simulation update. A better arrangement is:
 
@@ -214,9 +364,9 @@ Random write:    true only for the compute backend
 
 ### Ambient-wave texture
 
-The ambient-wave resource is another 1024² RGBA-half Custom Render Texture with generated mipmaps. Unlike the contact simulation, it is configured for continuous real-time updates and is not double-buffered. fileciteturn12file0
+The ambient-wave resource is another 1024² RGBA-half Custom Render Texture with generated mipmaps. Unlike the contact simulation, it is configured for continuous real-time updates and is not double-buffered.
 
-Its material contains only three directional wave bands with frequency, amplitude, speed and direction parameters, and its Shader Graph uses sine-wave calculations. This is a deterministic, stateless function of UV and time. fileciteturn28file0 fileciteturn31file0
+Its material contains only three directional wave bands with frequency, amplitude, speed and direction parameters, and its Shader Graph uses sine-wave calculations. This is a deterministic, stateless function of UV and time.
 
 It should be replaced by a shared analytical function:
 
@@ -244,7 +394,7 @@ That trade should still be benchmarked: on very large full-screen water coverage
 
 ### Planar reflection
 
-`SimplePlanarReflection` executes in `LateUpdate`, reflects the main camera across the water plane, builds an oblique clipping matrix and calls `_reflectionCam.Render()`. It skips rendering only when the main camera is below the water surface. fileciteturn5file0
+`SimplePlanarReflection` executes in `LateUpdate`, reflects the main camera across the water plane, builds an oblique clipping matrix and calls `_reflectionCam.Render()`. It skips rendering only when the main camera is below the water surface.
 
 Its default scale is `0.5` in each image dimension. A half-width, half-height target contains one quarter of the full-resolution pixel count, but still requires another scene cull, render submission and draw sequence.
 
@@ -259,15 +409,15 @@ This is likely to be the most variable and often the most expensive part of the 
 - Reflection culling mask.
 - Whether reflected objects are fill-rate or geometry limited.
 
-The current script creates or finds a reflection camera through hierarchy-index assumptions and would render independently for every water object carrying the component. fileciteturn5file0
+The current script creates or finds a reflection camera through hierarchy-index assumptions and would render independently for every water object carrying the component.
 
 ### Main scene rendering
 
 The custom water has at least two principal main-camera draws: the top mesh and front mesh. The actual pass and draw count can be higher because Shader Graph targets, 2D lighting, sorting and URP internals may introduce additional passes.
 
-The 2D renderer has Camera Sorting Layer Texture enabled, no downsampling, and no custom renderer features. The front-water material can therefore sample the scene captured up to a sorting-layer boundary without installing another behind-water renderer feature. fileciteturn24file0
+The 2D renderer has Camera Sorting Layer Texture enabled, no downsampling, and no custom renderer features. The front-water material can therefore sample the scene captured up to a sorting-layer boundary without installing another behind-water renderer feature.
 
-Unity’s 2D Renderer supports no downsampling, 2× bilinear, 4× box and 4× bilinear downsampling for the Camera Sorting Layer Texture. This provides a useful quality control for underwater distortion and tinting. citeturn3search6
+Unity’s 2D Renderer supports no downsampling, 2× bilinear, 4× box and 4× bilinear downsampling for the Camera Sorting Layer Texture. This provides a useful quality control for underwater distortion and tinting.
 
 ### CPU and allocation concerns
 
@@ -286,11 +436,11 @@ Although the custom solver runs on the GPU, the current implementation still has
 | Shared Custom Render Texture assets | Multiple water instances can share simulation state |
 | No visibility or activity suspension | Every enabled water simulates continuously |
 
-These concerns follow directly from the controller’s current lifecycle, mesh generation, layer assignment, update-zone construction and shared-material usage. fileciteturn4file0
+These concerns follow directly from the controller’s current lifecycle, mesh generation, layer assignment, update-zone construction and shared-material usage.
 
 ### Comparison with the Cainos CPU system
 
-The Cainos implementation updates a one-dimensional spring chain rather than a two-dimensional texture. It uses eight horizontal vertices per world unit, performs several neighbour-spreading iterations, then uploads the changed mesh vertices each physics tick. Its cost grows mainly with water width and spread-iteration count, rather than width multiplied by visual depth. fileciteturn16file0 fileciteturn18file0
+The Cainos implementation updates a one-dimensional spring chain rather than a two-dimensional texture. It uses eight horizontal vertices per world unit, performs several neighbour-spreading iterations, then uploads the changed mesh vertices each physics tick. Its cost grows mainly with water width and spread-iteration count, rather than width multiplied by visual depth.
 
 It is normally the cheaper simulation because it solves vastly fewer cells. Nevertheless, its rendering can still become expensive when blur, distortion, underwater effects and particles are active. The hybrid system should take its gameplay and editor ideas—not its CPU spring solver—because adding both wave solvers would duplicate work and create two competing definitions of the visible surface.
 
@@ -347,7 +497,7 @@ At 30 simulation updates per second and two propagation passes per update, 320 �
 
 ### Stable timestep and wave speed
 
-The current shader exposes a single `_Spread` coefficient and uses equal coefficients for X and Z. It also makes propagation speed depend on how many times `Update()` is repeated. This means that changing simulation frequency, texture resolution or iteration count changes the apparent physics. fileciteturn8file0
+The current shader exposes a single `_Spread` coefficient and uses equal coefficients for X and Z. It also makes propagation speed depend on how many times `Update()` is repeated. This means that changing simulation frequency, texture resolution or iteration count changes the apparent physics.
 
 A more principled update is:
 
@@ -405,7 +555,7 @@ It should not expose an unqualified “iterations per frame” slider as the mai
 
 ### Multiple impacts in one simulation step
 
-The current FIFO queue processes one impact per fixed tick. At 50 Hz, ten simultaneous contacts can take up to 0.2 seconds to enter the texture, which will feel visibly delayed. fileciteturn4file0
+The current FIFO queue processes one impact per fixed tick. At 50 Hz, ten simultaneous contacts can take up to 0.2 seconds to enter the texture, which will feel visibly delayed.
 
 The improved backend should process all impacts collected since its last simulation update, subject to a configurable safety cap.
 
@@ -469,7 +619,7 @@ Simulate when:
 
 A better implementation periodically estimates energy from known impact strengths and exponential damping without reading the texture back. This is conservative but avoids asynchronous GPU readback.
 
-Unity visibility callbacks can be useful, but they should not be the sole production criterion because editor Scene cameras and other cameras can influence renderer visibility. Use an explicit gameplay-camera frustum test or a central water-visibility manager. Unity documents renderer visibility callbacks as camera-dependent, which is why an explicit camera policy is safer. citeturn3search0
+Unity visibility callbacks can be useful, but they should not be the sole production criterion because editor Scene cameras and other cameras can influence renderer visibility. Use an explicit gameplay-camera frustum test or a central water-visibility manager. Unity documents renderer visibility callbacks as camera-dependent, which is why an explicit camera policy is safer.
 
 When an off-screen water receives an impact, there are two reasonable behaviours:
 
@@ -507,7 +657,7 @@ CSInjectImpacts
 CSPropagate
 ```
 
-Dispatch size is calculated from the kernel’s `numthreads` declaration and the state-texture dimensions. Unity requires runtime compute support checks through `SystemInfo.supportsComputeShaders`, and supported random-write formats should be validated per platform. citeturn3search1turn3search18turn5search4
+Dispatch size is calculated from the kernel’s `numthreads` declaration and the state-texture dimensions. Unity requires runtime compute support checks through `SystemInfo.supportsComputeShaders`, and supported random-write formats should be validated per platform.
 
 A shared interface keeps the choice reversible:
 
@@ -557,7 +707,7 @@ One reflected camera and texture can serve every registered surface in such a gr
 - A vertically mirrored strip sampled from the 2D Camera Sorting Layer Texture.
 - A blurred scene-colour approximation near the front seam.
 
-A mirrored sorting-layer texture will not reproduce objects outside the main view and is not a true reflection, but this limitation is often acceptable on a low tier. The current project already enables Camera Sorting Layer Texture, so the fallback can use the existing renderer facility. fileciteturn24file0
+A mirrored sorting-layer texture will not reproduce objects outside the main view and is not a true reflection, but this limitation is often acceptable on a low tier. The current project already enables Camera Sorting Layer Texture, so the fallback can use the existing renderer facility.
 
 ## Proposed hybrid runtime, physics and authoring system
 
@@ -565,7 +715,7 @@ A mirrored sorting-layer texture will not reproduce objects outside the main vie
 
 | Module | Responsibility |
 |---|---|
-| `Water2_5DController` | Holds dimensions and profiles; coordinates modules |
+| `Water25DController` | Holds dimensions and profiles; coordinates modules |
 | `WaterRuntimeResources` | Creates, owns and disposes meshes, materials and render textures |
 | `WaterMeshBuilder` | Builds top and front geometry without gameplay responsibilities |
 | `IWaterRippleSimulator` | Common simulation API |
@@ -580,11 +730,53 @@ A mirrored sorting-layer texture will not reproduce objects outside the main vie
 | `WaterFXPool` | Reuses effect instances without runtime Instantiate/Destroy churn |
 | `WaterStyleProfile` | Shared artistic settings |
 | `WaterQualityProfile` | Shared performance and resolution settings |
-| `Water2_5DEditor` | Foldouts, validation, actions and scene handles |
+| `Water25DEditor` | Foldouts, validation, actions and scene handles |
+
+### Assembly and dependency boundaries
+
+Create assembly definitions when the package begins to contain runtime or test code. The intended boundaries are:
+
+```text
+Water25D.Runtime.asmdef
+    Runtime code only
+    No UnityEditor reference
+    No reference-system assembly dependencies
+
+Water25D.Editor.asmdef
+    Editor-only
+    References Water25D.Runtime
+    Included only on the Editor platform
+
+Water25D.Tests.EditMode.asmdef
+    EditMode tests
+    References Runtime and Editor only when the test requires editor APIs
+
+Water25D.Tests.PlayMode.asmdef
+    PlayMode tests
+    References Runtime
+```
+
+Keep public runtime contracts in the runtime assembly. Migration tooling that needs legacy types should be isolated in a dedicated editor-only migration assembly or behind an explicitly temporary compile boundary so the final package can compile after the legacy systems are removed.
+
+Avoid circular references between runtime modules. Prefer plain data contracts and interfaces at module boundaries rather than direct dependencies on concrete implementations.
+
+### Public API principles
+
+The package should expose a small stable API rather than every implementation detail:
+
+- `Water25DController` as the primary authored component.
+- `IWaterRippleSimulator` as the simulation-backend contract.
+- `WaterImpact` for visual ripple requests.
+- `WaterInteraction` for physics and FX events.
+- C# events and optional UnityEvents for enter, exit, splash, ripple, submerge, and resurface.
+- Profile assets for shared style and quality configuration.
+- Explicit methods for resetting simulation, rebuilding authored data, and requesting impacts where gameplay needs them.
+
+Internal resource, reflection-group, pooling, and contact-tracking implementations should remain internal unless a demonstrated extension requirement justifies public exposure.
 
 ### Resource ownership
 
-The existing custom component assigns shared materials and references shared Custom Render Texture assets. This makes multiple water bodies vulnerable to shared visual settings and shared ripple state. fileciteturn4file0
+The existing custom component assigns shared materials and references shared Custom Render Texture assets. This makes multiple water bodies vulnerable to shared visual settings and shared ripple state.
 
 The improved ownership model should be:
 
@@ -648,7 +840,7 @@ Water size, fill/depth, interaction layers and buoyancy tuning remain instance s
 
 ### Buoyancy and underwater physics
 
-The Cainos water automatically creates or configures a trigger collider and `BuoyancyEffector2D`, updates the effector’s surface level when the water’s fill changes, and filters participating layers. fileciteturn17file0
+The Cainos water automatically creates or configures a trigger collider and `BuoyancyEffector2D`, updates the effector’s surface level when the water’s fill changes, and filters participating layers.
 
 That model ports cleanly, but the improved 2.5D prefab should use two colliders rather than one.
 
@@ -693,7 +885,7 @@ WaterPhysicsVolume2D
     Bubble requests
 ```
 
-The Cainos system applies force opposite to linear velocity and torque opposite to angular velocity while a Rigidbody2D remains in the water. fileciteturn18file0
+The Cainos system applies force opposite to linear velocity and torque opposite to angular velocity while a Rigidbody2D remains in the water.
 
 A more robust custom drag model can account for mass and submerged fraction, but the first milestone should retain an artist-friendly behaviour:
 
@@ -728,7 +920,7 @@ Where physically responsive bobbing is important, add a lightweight CPU-side cos
 
 ### Impact generation
 
-The current custom system uses random strength between `0.2` and `0.6`, while only direction is influenced by the Rigidbody2D’s vertical velocity. fileciteturn4file0
+The current custom system uses random strength between `0.2` and `0.6`, while only direction is influenced by the Rigidbody2D’s vertical velocity.
 
 The improved system should derive strength from measurable interaction:
 
@@ -791,7 +983,7 @@ The first qualifying crossing produces the enter event; the final qualifying exi
 
 ### FX strategy
 
-The Cainos system has mature splash selection, bubble trails, surface particles and underwater particles, but it creates splash and bubble objects through `Instantiate`. fileciteturn18file0
+The Cainos system has mature splash selection, bubble trails, surface particles and underwater particles, but it creates splash and bubble objects through `Instantiate`.
 
 The hybrid should retain the configuration concepts while replacing creation with pooling.
 
@@ -820,7 +1012,7 @@ public readonly struct WaterInteraction
 }
 ```
 
-Splash selection can use object width and speed thresholds, much like the Cainos configuration. Bubble emission should scale with collider area and remain attached only while the body is submerged. Continuous surface and underwater particle systems should scale their emission regions and rates from water width, depth or volume. Cainos already uses per-unit emission scaling and resizes particle shapes when the water changes. fileciteturn17file0turn18file0
+Splash selection can use object width and speed thresholds, much like the Cainos configuration. Bubble emission should scale with collider area and remain attached only while the body is submerged. Continuous surface and underwater particle systems should scale their emission regions and rates from water width, depth or volume. Cainos already uses per-unit emission scaling and resizes particle shapes when the water changes.
 
 For the 2.5D look:
 
@@ -843,11 +1035,11 @@ OnFullySubmerged
 OnResurface
 ```
 
-Each should carry the same `WaterInteraction` payload rather than only a level integer and position. Cainos currently exposes a splash UnityEvent but not a unified event model. fileciteturn16file0turn18file0
+Each should carry the same `WaterInteraction` payload rather than only a level integer and position. Cainos currently exposes a splash UnityEvent but not a unified event model.
 
 ### Inspector layout
 
-Cainos achieves its panelled layout through `FoldoutGroup` attributes, a custom Lucid Editor inspector, extensive tooltips, Undo integration and scene handles. fileciteturn16file0 fileciteturn19file0
+Cainos achieves its panelled layout through `FoldoutGroup` attributes, a custom Lucid Editor inspector, extensive tooltips, Undo integration and scene handles.
 
 The new system should reproduce the workflow in project-owned editor code:
 
@@ -886,17 +1078,91 @@ The editor should provide three scene handles:
 - Z visual depth.
 - Y physical/front depth.
 
-All handle changes must use Unity Undo and update meshes, triggers and bounds consistently. Cainos’ current editor already demonstrates the desired Undo and scene-handle workflow for two dimensions. fileciteturn19file0
+All handle changes must use Unity Undo and update meshes, triggers and bounds consistently. Cainos’ current editor already demonstrates the desired Undo and scene-handle workflow for two dimensions.
 
-A standalone editor is preferable to making the new system depend on Lucid Editor. The included Lucid copy is MIT-licensed but archived upstream and no longer an ideal foundation for new long-term tooling; retaining the same visual organisation through standard Unity editor APIs avoids adding another package dependency. fileciteturn33file0 citeturn4search0
+A standalone editor is preferable to making the new system depend on Lucid Editor. The included Lucid copy is MIT-licensed but archived upstream and no longer an ideal foundation for new long-term tooling; retaining the same visual organisation through standard Unity editor APIs avoids adding another package dependency.
+
+### Destination-project setup and validation
+
+The package should include an editor validator or setup report that checks, without silently overwriting project settings:
+
+- Required Unity and URP capabilities are available.
+- The active renderer is compatible with the package's front-water scene-colour approach.
+- Camera Sorting Layer Texture is configured when the selected style requires it.
+- Required sorting layers exist and are ordered correctly.
+- Required physics layers and collision masks exist.
+- Reflection culling masks exclude water and reflection-camera helper layers.
+- Required shader resources and material templates are assigned.
+- Compute support is checked only when the compute backend is selected.
+- Runtime graphics formats are supported before creating render textures.
+- Sample and migration assets do not contain missing references.
+
+The validator should provide actionable instructions and repair buttons only where a safe, deterministic edit is possible. Project settings must not be changed merely because a package component was selected in the Inspector.
 
 ## Implementation roadmap and file-by-file plan
 
-### Refactor milestone
+### Delivery rules and phase gates
 
-The first code milestone should preserve the current rendered result while splitting responsibilities.
+Implementation proceeds through independently reviewable phases. A phase may be split into several tasks, but a task should not opportunistically implement later phases.
 
-Replace the current `Init()` with:
+For every task:
+
+1. State the active phase and exact slice being implemented.
+2. Identify files allowed to change.
+3. Preserve a compiling intermediate state where possible.
+4. Inspect the complete diff for reference-system edits and accidental Unity reserialization.
+5. Run available validation and disclose unavailable Unity validation.
+6. Update `STATUS.md` only when the task genuinely changes milestone state.
+
+A phase is complete only when its exit criteria are met. Code existing in the repository is not, by itself, proof that the phase is complete.
+
+### Phase 0 — Baseline and package foundation
+
+**Goal:** establish a reproducible baseline, package ownership boundary, status record, and deterministic comparison workflow before replacement implementation begins.
+
+**Deliverables:**
+
+- Preserve the original custom and Cainos systems unchanged.
+- Confirm the active Unity and package versions from project files.
+- Create only the package directories needed for this phase.
+- Create `Assets/Water25D/Documentation/STATUS.md` from the status template in this plan.
+- Record the original custom-water prefab hierarchy, component references, material values, texture descriptors, renderer dependencies, layers, sorting layers, and demo-scene setup.
+- Capture baseline screenshots or golden images for representative camera positions.
+- Create or document a deterministic benchmark scene and test driver with fixed random seeds and repeatable impact trajectories.
+- Record which benchmark measurements require a development player and target hardware.
+- Record licensing and provenance constraints that affect migration or redistribution.
+- Add initial assembly definitions only if runtime or test code is introduced during this phase.
+
+**Recommended baseline artifacts:**
+
+```text
+Assets/Water25D/Documentation/STATUS.md
+Assets/Water25D/Documentation/BASELINE.md
+Assets/Water25D/Documentation/SETUP_REQUIREMENTS.md
+Assets/Water25D/Tests/ or Samples/Benchmark/ only when needed
+```
+
+**Exit criteria:**
+
+- The baseline scene and configuration can be reproduced without guesswork.
+- Reference-system files have no unintended changes.
+- The current rendering and interaction behaviour is documented.
+- Known project-level dependencies are listed.
+- The next structural-refactor task has an explicit comparison target.
+
+**Do not:**
+
+- Implement the replacement controller.
+- Retune source materials.
+- Modify Shader Graph assets.
+- Delete or migrate the original prefab.
+- Record estimates as profiler measurements.
+
+### Phase 1 — Structural refactor with visual parity
+
+**Goal:** create the package-owned controller, hierarchy validation, mesh builder, and coordination boundaries while preserving the current rendered result.
+
+The first implementation should replace the legacy all-in-one initialisation concept with clearly separated operations:
 
 ```text
 ValidateOrRepairHierarchy()
@@ -909,36 +1175,214 @@ ResetSimulation()
 RegisterReflectionSurface()
 ```
 
-Changing a colour should call only `ApplyStyleSettings()`. Changing wave speed should call only `ApplyQualitySettings()` or simulation parameter application. Changing water dimensions should rebuild geometry and volumes, then recreate the simulation texture only when its calculated resolution changes.
+Changing a colour should call only `ApplyStyleSettings()`. Changing wave speed should apply simulation or quality parameters without rebuilding geometry. Changing dimensions should rebuild geometry and volumes, and recreate simulation state only when the calculated texture dimensions change.
 
-Avoid calling a complete initialisation path from `OnValidate`, because that can:
+Avoid calling a complete initialisation path from `OnValidate`, because doing so can:
 
-- Rebuild a 26,000-vertex mesh while dragging a colour field.
-- Clear the simulation.
+- Rebuild a large mesh while dragging an unrelated Inspector field.
+- Clear simulation state.
 - Reallocate render textures.
-- Alter shared assets.
+- Mutate shared assets.
 - Disrupt reflection cameras.
+- Produce excessive Undo and serialized changes.
 
-### Simulation optimisation milestone
+**Deliverables:**
 
-Implement an optimised CRT backend with:
+- `Water25DController` as a thin coordinator.
+- `WaterMeshBuilder` for top and front geometry.
+- Hierarchy validation or repair logic.
+- Package-owned top and front rendering templates or temporary adapters clearly marked for removal.
+- Visual-comparison hooks or a comparison scene.
+- EditMode tests for deterministic mesh counts, bounds, UV mapping, and dimension changes where practical.
+
+**Exit criteria:**
+
+- The package-owned hierarchy can be created or repaired deterministically.
+- Top and front geometry match the baseline within documented tolerances.
+- Unrelated Inspector changes do not rebuild all resources.
+- No reference-system source files were refactored to support the package.
+- Visual parity has been checked in Unity, or the missing Unity check is explicitly recorded.
+
+### Phase 2 — Runtime resource ownership and disposal
+
+**Goal:** eliminate accidental shared mutable state and establish explicit lifecycle ownership before adding further systems.
+
+**Deliverables:**
+
+- `WaterRuntimeResources` or equivalent explicit resource owner.
+- Runtime-created ripple state rather than committed shared simulation state.
+- Correct ownership of generated meshes, material instances or property blocks, render textures, buffers, helper cameras, and helper GameObjects.
+- Safe cleanup for component disable, destruction, domain reload, Play Mode exit, scene unload, runtime resize, and resource replacement.
+- Validation warnings for shared mutable resources.
+- Tests proving two water bodies do not share ripple state or per-instance material values unintentionally.
+
+**Resource policy:**
+
+```text
+Project assets
+    immutable templates and profiles
+
+Per water instance
+    generated top mesh
+    generated front mesh
+    mutable ripple state
+    impact queue
+    contact state
+    per-instance material data
+
+Per reflection group
+    reflection camera
+    reflection texture
+    projection data
+
+Scene or global owner
+    FX pools
+    reflection manager
+    optional shared allocation pools
+```
+
+**Exit criteria:**
+
+- Two water instances can run without contaminating each other's state.
+- Rebuild and teardown paths do not leave stale generated resources.
+- Normal play does not instantiate materials or recreate textures repeatedly.
+- Template assets remain unchanged during Play Mode.
+
+### Phase 3 — Authoring, profiles, and Inspector workflow
+
+**Goal:** provide a project-owned authoring experience before the system becomes more complex.
+
+**Deliverables:**
+
+- `WaterStyleProfile` for shared artistic settings.
+- `WaterQualityProfile` for cost and quality controls.
+- Grouped custom Inspector using standard Unity editor APIs.
+- X width, Z visual depth, and Y physical-depth scene handles.
+- Undo/Redo support for all authored changes.
+- Derived performance and memory information in the Inspector.
+- Validation messages and explicit actions such as repair hierarchy, rebuild geometry, reset simulation, and create instance-owned resources.
+- Setup validator for layers, sorting layers, renderer requirements, materials, and profiles.
+
+Do not make the new package depend on Lucid Editor or Odin Inspector.
+
+**Exit criteria:**
+
+- Common authoring operations do not require editing serialized files manually.
+- Undo and Redo restore dimensions, hierarchy, meshes, and trigger sizes correctly.
+- Shared profiles remain immutable at runtime.
+- Performance-derived values update without triggering full resource rebuilds.
+
+### Phase 4 — Separate physics volumes and buoyancy
+
+**Goal:** establish stable flat 2D gameplay buoyancy independent of visual ripple height.
+
+Create two separate colliders:
+
+**Buoyancy volume**
+
+```text
+Width:   water width
+Height:  physical underwater depth
+Top:     waterline
+Bottom:  waterline - physical depth
+```
+
+It should be a trigger, support `BuoyancyEffector2D`, and cover the complete playable underwater region.
+
+**Surface-crossing trigger**
+
+```text
+Width:      water width
+Height:     small configurable crossing band
+Centre Y:   waterline
+```
+
+It should not be used by the buoyancy effector. Its purpose is legitimate surface-crossing detection.
+
+**Deliverables:**
+
+- `WaterPhysicsVolume2D`.
+- Buoyancy-effector setup and validation.
+- Optional custom linear and angular drag with clear interaction rules.
+- Submerged Rigidbody2D tracking.
+- Tests across common collider shapes and body masses.
+- Side-entry and bottom-entry tests proving they do not create surface splashes.
+
+Do not drive `BuoyancyEffector2D.surfaceLevel` from GPU texture readback.
+
+**Exit criteria:**
+
+- Objects float predictably on a flat gameplay surface.
+- Resizing the water updates both physical volumes correctly.
+- Effector drag and custom drag cannot be unintentionally doubled.
+- Physics remains functional while visual simulation is disabled or suspended.
+
+### Phase 5 — Interaction, depth policy, and logical contact tracking
+
+**Goal:** produce immediate, deterministic, depth-aware logical impacts and events without multi-collider duplication.
+
+**Deliverables:**
+
+- `WaterSurfaceInteraction2D`.
+- `WaterContactTracker` keyed by logical Rigidbody2D identity.
+- `WaterDepthAnchor` with transform-Z, fixed-lane, anchor-transform, and custom-provider policies.
+- `WaterImpact` and `WaterInteraction` data contracts.
+- Velocity-sensitive impact strength.
+- World-relative impact radius.
+- Collider-surface intersection or a documented equivalent for impact location.
+- All pending impacts processed per simulation update up to a configurable cap.
+- Enter, exit, splash, ripple, fully submerged, and resurface events.
+- Cooldown or deduplication behaviour for noisy collider configurations.
+
+A practical initial strength model is:
+
+```csharp
+float speedFactor = Mathf.InverseLerp(
+    minImpactSpeed,
+    maxImpactSpeed,
+    Mathf.Abs(rb.linearVelocity.y));
+
+float sizeFactor = Mathf.Clamp(
+    collider.bounds.size.x / referenceWidth,
+    minSizeMultiplier,
+    maxSizeMultiplier);
+
+float strength = Mathf.Clamp01(
+    speedFactor *
+    sizeFactor *
+    rippleStrengthMultiplier);
+```
+
+**Exit criteria:**
+
+- A multi-collider character generates one logical entry and exit.
+- Simultaneous impacts do not wait in a one-impact-per-fixed-tick backlog.
+- Impact position and depth mapping are correct at representative lanes and bounds.
+- Trigger and non-trigger masks work independently.
+
+### Phase 6 — Optimised Custom Render Texture simulation
+
+**Goal:** replace the fixed high-cost shared ripple asset with an instance-owned, rectangular, world-relative, no-mipmap CRT backend.
+
+Implement:
 
 ```text
 Rectangular world-relative resolution
 Two-channel half-float state where supported
 No mipmaps
 No automatic mip generation
-30 Hz default simulation
-Two substeps default
+Configurable simulation frequency
+Bounded catch-up substeps
 Preallocated impact storage
 All pending impacts processed per step
 World-relative impact radii
 Idle and visibility suspension
 Per-second damping
 Aspect-correct propagation coefficients
+Runtime format and capability checks
 ```
 
-Use a custom accumulator rather than `FixedUpdate` as the only simulation clock:
+Use a custom accumulator rather than tying visual simulation directly to the 2D physics timestep:
 
 ```csharp
 _accumulator += Time.deltaTime;
@@ -952,18 +1396,85 @@ while (_accumulator >= simulationStep &&
 }
 ```
 
-The visual simulation should not be implicitly tied to the 2D physics timestep. Impacts generated during physics can simply be queued.
+The finite-difference coefficients should derive from world-space cell size and substep duration:
 
-### Reflection milestone
+```text
+sx = (waveSpeed × substepDuration / cellSizeX)²
+sz = (waveSpeed × substepDuration / cellSizeZ)²
+```
 
-Replace `SimplePlanarReflection` with a scene-level manager:
+Apply a documented stability margin so that the explicit update does not exceed its supported bound.
+
+**Deliverables:**
+
+- `CustomRenderTextureRippleSimulator` behind `IWaterRippleSimulator`.
+- Runtime descriptor calculation and format fallback.
+- Batch impact injection without steady-state allocation.
+- Visibility and idle policy.
+- Numerical validation for supported parameter ranges.
+- Benchmark comparison against the original configuration.
+
+**Exit criteria:**
+
+- The backend owns independent state per active water body.
+- The default medium configuration uses rectangular world-relative resolution.
+- Simulation does not generate mipmaps.
+- Multiple impacts appear without visible FIFO delay.
+- Normal play produces zero managed allocation from the simulation path after warm-up.
+- Measured results are clearly separated from analytical estimates.
+
+### Phase 7 — Analytical ambient waves
+
+**Goal:** remove the stateless continuously updated ambient-wave CRT after a visually equivalent analytical replacement is available.
+
+Use a shared HLSL function such as:
+
+```hlsl
+float EvaluateDirectionalWave(
+    float2 worldXZ,
+    float2 direction,
+    float frequency,
+    float amplitude,
+    float speed,
+    float time)
+{
+    direction = normalize(direction);
+    float phase =
+        dot(worldXZ, direction) * frequency +
+        time * speed;
+
+    return sin(phase) * amplitude;
+}
+```
+
+Both top and front rendering should use the same wave definition so the top surface and front seam remain coherent.
+
+**Deliverables:**
+
+- `WaterAmbientWaves.hlsl` or equivalent package-owned shared function.
+- Quality-controlled wave-band count.
+- Top and front shader integration.
+- Visual comparison at the seam, edges, and representative camera distances.
+- Removal of the ambient CRT dependency only after validation.
+
+**Exit criteria:**
+
+- Ambient-wave appearance remains within documented visual tolerances.
+- The ambient CRT and its update cost are absent from the new package runtime.
+- Low, medium, and high profiles can select appropriate wave-band counts.
+
+### Phase 8 — Shared adaptive reflection management
+
+**Goal:** replace per-water always-rendering reflection cameras with centrally managed compatible reflection groups and quality fallbacks.
+
+Create:
 
 ```text
 WaterReflectionManager
     Dictionary<ReflectionGroupKey, ReflectionGroup>
 ```
 
-A group key should include:
+A group key should include relevant values such as:
 
 ```text
 Plane normal
@@ -971,6 +1482,7 @@ Quantised plane height
 Culling mask
 Quality profile
 Camera identity
+Projection context where necessary
 ```
 
 Each group owns:
@@ -979,38 +1491,35 @@ Each group owns:
 One disabled reflection camera
 One render texture
 Last rendered camera pose
-Last update frame
+Last update frame or time
 Registered visible water surfaces
 Dirty state
+Reflection view-projection data
 ```
 
-The manager renders only groups that contain at least one visible surface. It must exclude reflection cameras and water layers from reflection culling to avoid recursion.
+Update a group when camera motion, camera rotation, maximum interval, important reflected-object changes, visibility, or explicit invalidation requires it.
 
-### Physics and interaction milestone
+**Deliverables:**
 
-Create:
+- `WaterReflectionManager` and `WaterReflectionGroup`.
+- Registration and deregistration lifecycle.
+- Recursion-safe culling policy.
+- Adaptive update policy.
+- Reflection-disabled and stylised fallback modes.
+- Tests for coplanar grouping and non-coplanar separation.
 
-- `WaterSurfaceInteraction2D`.
-- `WaterPhysicsVolume2D`.
-- `WaterDepthAnchor`.
-- A logical contact tracker.
-- `WaterInteraction` event payloads.
-- Layer filtering for trigger and non-trigger colliders.
+**Exit criteria:**
 
-Port the Cainos behaviour conceptually:
+- Reflection cost scales with active compatible groups rather than raw water-body count.
+- Reflection cameras never render themselves or one another.
+- Invisible groups do not render.
+- Reflection-disabled quality creates no reflection-camera render.
 
-- Layer-filtered enter/stay/exit handling.
-- Velocity-sensitive disturbance.
-- Linear and angular drag.
-- Buoyancy-effector configuration.
-- Splash size and speed filtering.
-- Bubble duration and amount scaling. fileciteturn17file0turn18file0
+### Phase 9 — Pooled FX and presentation events
 
-Do not copy the Cainos CPU spring update into the new controller.
+**Goal:** add project-owned splash, bubble, foam, droplet, and underwater effects without runtime creation churn.
 
-### FX milestone
-
-Implement a pool API:
+Implement a pool API such as:
 
 ```csharp
 public interface IWaterFXPool
@@ -1021,56 +1530,163 @@ public interface IWaterFXPool
 }
 ```
 
-Pool operations must not allocate in steady state. Prewarm sizes should be profile-driven, and pool exhaustion should either expand in a controlled manner or reject low-priority requests.
+**Deliverables:**
 
-### Compute milestone
+- `WaterFXController`.
+- `WaterFXPool` with explicit owner and cleanup.
+- Project-owned `WaterFXDefinition` assets.
+- Configurable prewarm counts and predictable exhaustion policy.
+- Entry and exit splash selection using speed and size.
+- Bubble attachment and release behaviour.
+- Surface and underwater continuous-effect scaling.
+- Event-to-FX wiring that does not make gameplay depend on visual effects.
 
-Only after the optimised CRT benchmark is complete, implement `ComputeRippleSimulator`.
+**Exit criteria:**
 
-The compute backend should preserve exactly the same public settings and `HeightTexture` contract so scenes do not depend on the backend.
+- Normal gameplay does not repeatedly `Instantiate` or `Destroy` water effects.
+- Pools return instances correctly and survive scene transitions according to their ownership policy.
+- FX remain depth-aware and visually aligned with the 2.5D presentation.
+- Cainos assets are not copied into the package.
 
-A useful comparison is:
+### Phase 10 — Optional compute-backend experiment
+
+**Goal:** determine whether explicit compute ping-pong provides a meaningful target-device improvement over the optimised CRT backend.
+
+Do not begin this phase until Phase 6 is complete and benchmarked.
+
+The compute backend should preserve the same settings and public `HeightTexture` contract as the CRT backend:
 
 ```text
-Same water dimensions
-Same texels per unit
-Same simulation frequency
-Same wave speed
-Same damping
-Same impacts
-Same top/front materials
+HeightStateA: RGHalf or validated fallback
+HeightStateB: RGHalf or validated fallback
+ImpactBuffer: StructuredBuffer<WaterImpact>
+
+Kernels:
+    CSClear
+    CSInjectImpacts
+    CSPropagate
 ```
 
-This isolates backend cost rather than comparing visually different configurations.
+Compare backends using identical:
+
+```text
+Water dimensions
+State dimensions
+State format
+Simulation frequency
+Substeps
+Wave speed
+Damping
+Impacts
+Rendering materials
+Camera setup
+Target hardware
+```
+
+**Exit criteria:**
+
+- Capability checks and fallback behaviour are correct.
+- Visual behaviour is sufficiently equivalent for the same public settings.
+- Benchmark evidence shows whether compute is materially better, neutral, or worse on intended hardware.
+- Compute becomes a default only when the measured benefit justifies maintenance and compatibility cost.
+
+A valid outcome is to keep compute experimental or omit it from the first release.
+
+### Phase 11 — Migration tooling and reversible conversion
+
+**Goal:** convert existing custom-water instances without destroying the baseline or requiring vendor content.
+
+A migration wizard should:
+
+```text
+Read old InteractiveWater settings
+Create or repair the new hierarchy
+Create a WaterStyleProfile from current material values
+Create or assign a WaterQualityProfile
+Map top and front dimensions
+Map sorting layers
+Map reflection mask and scale
+Create buoyancy and surface triggers
+Create package-owned runtime descriptors
+Register the reflection plane
+Disable, but initially retain, old components
+Produce warnings and a conversion summary
+```
+
+Migration tooling may reference legacy types only in editor-only code. Isolate that dependency so the runtime package compiles without legacy assemblies.
+
+**Exit criteria:**
+
+- Conversion is reversible until acceptance tests pass.
+- Original components and serialized values are retained during the verification period.
+- The wizard reports unsupported or ambiguous mappings instead of guessing silently.
+- Migrated prefabs contain no unintended vendor references.
+
+### Phase 12 — Packaging, clean-project import, and production validation
+
+**Goal:** prove the system is self-contained, documented, performant, and safe to move into another compatible project.
+
+**Deliverables:**
+
+- Package README and setup guide.
+- Required renderer, layer, sorting-layer, and physics configuration documentation.
+- Sample water prefab and minimal sample scene using package-owned assets.
+- API and profile documentation.
+- Upgrade and migration notes.
+- Clean-project import test.
+- Missing-reference and dependency scan.
+- Target-device benchmark captures.
+- Release acceptance report.
+
+**Clean-project import procedure:**
+
+1. Create or use a clean compatible Unity project.
+2. Import only `Assets/Water25D/` and explicitly documented package dependencies.
+3. Reproduce required project settings using the setup guide or validator.
+4. Open the sample scene.
+5. Run EditMode and PlayMode tests.
+6. Build a development player for at least one intended target.
+7. Confirm no references resolve into the source repository's custom, Cainos, or demo folders.
+
+**Exit criteria:**
+
+- Runtime and editor assemblies compile in the clean project.
+- Sample content renders and interacts correctly after documented setup.
+- No package-owned asset has a missing serialized reference.
+- No steady-state runtime allocation violates the accepted budget.
+- Target-device results meet the release budget or documented quality-tier limits.
+- Licensing and attribution documentation is complete for every distributed asset.
 
 ### Existing-file changes
 
 | Existing file or asset | Proposed action |
 |---|---|
-| `InteractiveWater.cs` | Reduce to migration façade or replace with `Water2_5DController` |
-| `SimplePlanarReflection.cs` | Deprecate and replace with `WaterReflectionManager` |
-| `CRT_RippleSimulation.shader` | Add separate X/Z coefficients and remove artist-dependent timestep coupling |
-| `RippleSimulation.asset` | Stop using as shared runtime state; use it only as a template or remove |
-| `AmbientWave.asset` | Remove after analytical waves are validated |
-| `CRT_AmbientWave.shadergraph` | Replace with shared HLSL function |
-| `TopMesh.shadergraph` | Sample runtime ripple state and analytical waves; consume reflection matrix |
-| `FrontMesh.shadergraph` | Use analytical seam waves and runtime ripple state; retain tint, caustics and distortion |
-| `TopMesh.mat` | Treat as immutable template |
-| `FrontMesh.mat` | Treat as immutable template |
-| `PixelWater.cs` | Behavioural reference only; do not merge the spring solver |
-| `PixelWaterEditor.cs` | Workflow reference for tooltips, groups, Undo and handles |
-| `Renderer2D.asset` | Add quality-specific Camera Sorting Layer downsampling where required |
-| `UniversalRP.asset` | Keep a project profile; introduce platform quality variants only when measured |
+| `InteractiveWater.cs` | Preserve as baseline; later reduce to a migration façade only if explicitly required |
+| `SimplePlanarReflection.cs` | Preserve as baseline; deprecate only after the reflection manager passes comparison |
+| `CRT_RippleSimulation.shader` | Reference equation; package-owned replacement adds separate X/Z coefficients and timestep-independent controls |
+| `RippleSimulation.asset` | Do not use as shared runtime state in the new package |
+| `AmbientWave.asset` | Preserve until analytical waves are validated; not a package runtime dependency afterward |
+| `CRT_AmbientWave.shadergraph` | Behavioural reference for the analytical package-owned wave function |
+| `TopMesh.shadergraph` | Visual reference; package replacement samples runtime ripple state and analytical waves |
+| `FrontMesh.shadergraph` | Visual reference; package replacement retains tint, caustics, distortion, depth fade, and seam coherence |
+| `TopMesh.mat` | Immutable baseline/template reference; never mutate for per-instance state |
+| `FrontMesh.mat` | Immutable baseline/template reference; never mutate for per-instance state |
+| `PixelWater.cs` | Behavioural reference only; do not merge or copy its spring solver |
+| `PixelWaterEditor.cs` | Workflow reference for tooltips, groups, Undo, and handles |
+| `Renderer2D.asset` | Project-level reference; document or validate required sorting-texture setup |
+| `UniversalRP.asset` | Project-level reference; add quality variants only when measured and explicitly required |
+| `THIRD_PARTY_NOTICES.md` | Keep current; update only when distributed content or provenance findings change |
 
-The current top material already references ambient, ripple and reflection textures, while the front material exposes the desired caustic, distortion, colour and depth properties. This means the visual migration can preserve the existing look while changing how textures and values are supplied. fileciteturn26file0 fileciteturn27file0
+### Target file structure
 
-### New file structure
+These paths and names are architectural defaults. Create directories only when the active phase needs them.
 
 ```text
-Assets/Water2_5D/
+Assets/Water25D/
 ├── Runtime/
+│   ├── Water25D.Runtime.asmdef
 │   ├── Core/
-│   │   ├── Water2_5DController.cs
+│   │   ├── Water25DController.cs
 │   │   ├── WaterMeshBuilder.cs
 │   │   └── WaterRuntimeResources.cs
 │   ├── Simulation/
@@ -1098,35 +1714,122 @@ Assets/Water2_5D/
 │       ├── WaterStyleProfile.cs
 │       └── WaterQualityProfile.cs
 ├── Editor/
-│   ├── Water2_5DEditor.cs
+│   ├── Water25D.Editor.asmdef
+│   ├── Water25DEditor.cs
 │   ├── WaterSceneHandles.cs
 │   ├── WaterEditorValidation.cs
-│   └── InteractiveWaterMigrationWizard.cs
+│   ├── WaterProjectSetupValidator.cs
+│   └── Migration/
+│       └── InteractiveWaterMigrationWizard.cs
 ├── Shaders/
 ├── Materials/
 ├── Profiles/
 ├── Prefabs/
-└── Tests/
+├── Samples/
+│   ├── Minimal/
+│   └── Benchmark/
+├── Tests/
+│   ├── EditMode/
+│   │   └── Water25D.Tests.EditMode.asmdef
+│   └── PlayMode/
+│       └── Water25D.Tests.PlayMode.asmdef
+└── Documentation/
+    ├── STATUS.md
+    ├── BASELINE.md
+    ├── SETUP_REQUIREMENTS.md
+    ├── MIGRATION.md
+    ├── API.md
+    └── Benchmarks/
 ```
 
-### Recommended delivery sequence
+### Status tracking template
 
-| Delivery stage | Result |
+Create `Assets/Water25D/Documentation/STATUS.md` when Phase 0 starts, using this minimum structure:
+
+```md
+# Water25D Implementation Status
+
+## Current phase
+
+Phase number, phase name, and active task slice.
+
+## Completed
+
+Only work that has been implemented and validated to the stated level.
+
+## In progress
+
+Files and behaviour currently being changed.
+
+## Validation evidence
+
+Commands, Unity test runs, scenes, captures, profiler data, and dates.
+
+## Validation still required
+
+Exact Unity Editor, player-build, rendering, physics, or target-device checks not yet performed.
+
+## Known issues and risks
+
+Current defects, uncertainty, compatibility risks, and performance concerns.
+
+## Temporary dependencies
+
+Every temporary reference to legacy custom water, Cainos, demo content, or migration-only code, including its removal phase.
+
+## Architectural deviations
+
+Any deliberate departure from this plan, with reason and migration consequence.
+
+## Next task
+
+One bounded next implementation task, not the entire remaining roadmap.
+```
+
+### Recommended delivery summary
+
+| Phase | Result |
 |---|---|
-| Baseline | Original prefab and benchmark scene captured unchanged |
-| Structural refactor | Same visuals, modular code and correct resource disposal |
-| Authoring | Grouped inspector, tooltips, actions, warnings and scene handles |
-| Physics | Separate buoyancy and crossing triggers, drag and events |
-| Interaction | Velocity-sensitive, depth-aware, multi-impact ripple insertion |
-| CRT optimisation | Rectangular no-mip state, adaptive rate and inactivity suspension |
-| Ambient optimisation | Analytical ambient waves replace the ambient CRT |
-| Reflection | Shared adaptive manager and quality fallbacks |
-| FX | Pooled splashes, bubbles and continuous particles |
-| Compute experiment | Optional backend measured against optimised CRT |
-| Migration | Wizard and prefab conversion workflow |
-| Production validation | Target-device performance and automated acceptance suite |
+| 0. Baseline | Reproducible source baseline, status file, setup requirements, and deterministic comparison workflow |
+| 1. Structural refactor | Package-owned hierarchy and modular coordination with visual parity |
+| 2. Resource ownership | Correct independent runtime state and disposal |
+| 3. Authoring | Profiles, grouped Inspector, validation, Undo, and scene handles |
+| 4. Physics | Separate buoyancy and crossing volumes with flat 2D gameplay surface |
+| 5. Interaction | Depth-aware logical contacts, events, and immediate batched impacts |
+| 6. CRT optimisation | Rectangular no-mip instance-owned state with adaptive scheduling |
+| 7. Ambient optimisation | Analytical ambient waves replace the ambient CRT |
+| 8. Reflection | Shared adaptive reflection groups and camera-free fallbacks |
+| 9. FX | Pooled package-owned splashes, bubbles, foam, and underwater effects |
+| 10. Compute experiment | Optional backend measured fairly against optimised CRT |
+| 11. Migration | Reversible prefab and settings conversion workflow |
+| 12. Production validation | Clean-project import, documentation, target-device benchmarks, and release acceptance |
 
 ## Benchmarking, quality tiers and acceptance criteria
+
+### Benchmark evidence and provenance
+
+Every recorded benchmark result must include:
+
+- Unity version read from `ProjectSettings/ProjectVersion.txt`.
+- Relevant package versions.
+- Commit SHA or exact working-tree state.
+- Scene and test-driver version.
+- Target hardware, operating system, graphics API, resolution, and quality profile.
+- Development-player or Editor context.
+- Warm-up duration, capture duration, and number of frames or samples.
+- Whether VSync, frame caps, deep profiling, safety checks, and GPU profiling were enabled.
+- Exact water count, visible-water count, reflection-group count, impact load, FX load, and simulation configuration.
+- Raw capture location or reproducible steps.
+
+Do not compare configurations that differ in visual settings unless the difference is the subject of the test. Do not label estimated cell-update counts or texture-memory arithmetic as measured GPU cost.
+
+Store summaries under:
+
+```text
+Assets/Water25D/Documentation/Benchmarks/
+```
+
+Large profiler captures or platform-specific binaries should be stored according to repository policy rather than committed automatically.
 
 ### Baseline benchmark scene
 
@@ -1176,7 +1879,7 @@ Peak allocation during initialisation
 Impact-to-visible-ripple latency
 ```
 
-Unity’s Rendering Profiler exposes batches, SetPass calls, triangles and vertices; the Frame Debugger exposes individual rendering events; the Memory Profiler and Memory module expose texture, mesh and managed-memory usage; and Profile Analyzer assists comparison across captured frame ranges. citeturn3search14turn7search1turn7search3turn7search5turn7search9
+Unity’s Rendering Profiler exposes batches, SetPass calls, triangles and vertices; the Frame Debugger exposes individual rendering events; the Memory Profiler and Memory module expose texture, mesh and managed-memory usage; and Profile Analyzer assists comparison across captured frame ranges.
 
 Profile in a development player on each intended hardware class. Editor profiling is useful for diagnostics but includes editor cameras, inspectors and other overhead that can distort visibility, memory and CPU measurements.
 
@@ -1258,6 +1961,17 @@ The test suite should verify:
 23. An impact wakes a suspended simulation.
 24. Runtime resizing safely releases and recreates relevant resources.
 25. Simulation remains finite under maximum supported strength and speed.
+26. Runtime and editor assemblies compile when reference-system folders are absent from a test copy.
+27. Package-owned prefabs, materials, profiles, shaders and samples contain no serialized references into reference-only folders.
+28. Setup validation reports missing layers, sorting layers, renderer settings and unsupported formats without silently changing the project.
+29. Migration-only assemblies are editor-only and can be removed without breaking runtime compilation.
+30. A clean-project sample can be configured using only the documented setup requirements.
+31. Disabling or destroying water releases generated meshes, textures, buffers, cameras and pooled ownership correctly.
+32. Domain reload and Enter Play Mode configuration do not leave stale package-owned resources.
+33. Quality-profile switching does not mutate shared assets or leak old runtime resources.
+34. Renderer or graphics-format incompatibility produces a clear fallback or validation error rather than undefined output.
+35. Package-owned code, assembly definitions, documentation, samples, prefabs, and tests use `Water25D` consistently and contain no stale alternate technical identifier.
+36. Runtime types use the `Water25D` namespace or an approved nested namespace, and editor types remain in editor-only assemblies and namespaces.
 
 ### Performance acceptance tests
 
@@ -1288,6 +2002,52 @@ Optimised CRT versus compute
 ```
 
 Compute should become the default only if it produces a meaningful target-device improvement after its extra maintenance and compatibility cost are considered.
+
+### Release-candidate gates
+
+Before calling the package production-ready, verify:
+
+```text
+Architecture
+    Package-owned runtime has no permanent reference-system dependency
+    Runtime and editor assembly boundaries are valid
+    Public API and profiles are documented
+
+Serialization
+    No missing references
+    No accidental shared mutable assets
+    No modified vendor GUIDs or copied vendor content
+
+Runtime
+    Correct lifecycle cleanup
+    Zero steady-state managed allocation in accepted normal-play scenarios
+    Stable behaviour across resize, disable, scene unload and quality changes
+
+Rendering
+    Top/front seam coherence
+    Reflection recursion prevention
+    Quality fallbacks work
+    Required renderer configuration is validated
+
+Physics
+    Flat buoyancy remains deterministic
+    Multi-collider bodies produce logical events
+    Side and bottom volume entry do not create false surface splashes
+
+Performance
+    Target-device captures exist
+    Lower tiers produce measured reductions
+    Reflection scales by group
+    Inactive water approaches zero simulation cost
+
+Packaging
+    Clean-project import passes
+    Setup guide is sufficient
+    Sample scene uses package-owned content
+    `Water25D` naming is consistent across folders, namespaces, assemblies, types, docs, and samples
+    No stale alternate technical identifiers remain
+    Licensing and attribution are complete
+```
 
 ### Recommended first production milestone
 
@@ -1340,7 +2100,7 @@ At 320 × 104, 30 Hz and two substeps, the raw propagation-cell workload is unde
 | Analytical ambient waves increase shader ALU | Low–medium | Benchmark vertex/pixel variants; reduce bands by quality tier |
 | Low-tier reflection approximation looks incorrect | Low–medium | Treat it as stylised rather than physically exact |
 
-The repository’s own notices state that Cainos content is vendor material whose redistribution rights must be verified, that the included Lucid Editor copy carries an MIT attribution requirement, and that the custom water’s original provenance also needs confirmation. The repository intentionally has no single root licence because its content has mixed origins. fileciteturn33file0
+The repository’s own notices state that Cainos content is vendor material whose redistribution rights must be verified, that the included Lucid Editor copy carries an MIT attribution requirement, and that the custom water’s original provenance also needs confirmation. The repository intentionally has no single root licence because its content has mixed origins.
 
 The safe implementation policy is:
 
@@ -1393,6 +2153,24 @@ Produce a warnings and conversion summary
 
 The conversion should be reversible until the new prefab passes functional and performance acceptance tests.
 
+### Open decisions to resolve during implementation
+
+These questions should be resolved with repository constraints and measurements rather than guessed in advance:
+
+- Primary target platforms and frame-rate targets.
+- Minimum supported graphics capabilities and graphics APIs.
+- Whether the first release ships as an `Assets/Water25D/` package, a Unity `.unitypackage`, or later becomes a UPM package.
+- Whether a screen-derived low-quality reflection is visually acceptable or a simpler authored gradient is preferable.
+- Which rendering features require Camera Sorting Layer Texture and which can degrade gracefully without it.
+- Whether `R16G16_SFloat` is supported on all intended targets or requires a fallback format.
+- Whether compute provides enough measured benefit to ship.
+- How many simultaneous visible water bodies and reflection groups the game must support.
+- Whether selected gameplay objects need optional cosmetic CPU bobbing beyond flat buoyancy.
+- Which project-owned art, audio, and FX assets will be distributed with the package.
+- What licensing and attribution apply to any retained or derived custom-water code and assets.
+
+Record resolved decisions in package documentation and update this plan only when the architectural contract changes.
+
 ### Final recommendation
 
 The most defensible production path is:
@@ -1406,3 +2184,28 @@ The most defensible production path is:
 7. **Benchmark before developing or adopting compute as the default.**
 
 This approach preserves what makes the 2.5D system distinctive—the visible XZ surface and XY underwater face—while replacing its demonstration-oriented architecture with one that is author-friendly, scalable across multiple water bodies, measurable, and suitable for long-term game production.
+
+## How to use this plan with Codex
+
+Give Codex one bounded phase task at a time. A good task identifies:
+
+- The active phase.
+- The exact deliverable or defect.
+- The files or package area allowed to change.
+- Required behaviour and non-goals.
+- Validation that can run in the current environment.
+- Manual Unity checks that must be reported if unavailable.
+
+Example:
+
+```text
+Implement Phase 0 only. Create the initial Water25D package documentation,
+STATUS.md, baseline inventory, naming audit, and deterministic benchmark specification.
+Use `Water25D` consistently for all technical identifiers and retain `2.5D Water`
+for human-facing prose.
+Do not implement replacement runtime water code and do not modify the custom
+or Cainos reference systems. Inspect the current project settings and list all
+manual Unity baseline captures still required.
+```
+
+Do not ask Codex to “implement the plan” as one task. The plan is intentionally phased so each change can be reviewed, validated, and reverted independently.
