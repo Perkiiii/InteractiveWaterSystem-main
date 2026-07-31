@@ -1,10 +1,9 @@
-// Made with Amplify Shader Editor v1.9.9.5
+// Made with Amplify Shader Editor v1.9.9.9
 // Available at the Unity Asset Store - http://u3d.as/y3X 
 Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 {
 	Properties
 	{
-		[HideInInspector] _EmissionColor("Emission Color", Color) = (1,1,1,1)
 		_MainTex( "Main Tex", 2D ) = "white" {}
 		_StencilReference( "Stencil Reference", Int ) = 123
 		_BubbleColorOutline( "Bubble Color Outline", Color ) = ( 0.8901961, 0.9921569, 1, 0.3921569 )
@@ -12,7 +11,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 		_DistortionSpeed( "Distortion Speed", Float ) = 1
 		_DistortionScale( "Distortion Scale", Float ) = 1.5
 		_DistortionStrength( "Distortion Strength", Float ) = 0.5
-		[HideInInspector] _texcoord( "", 2D ) = "white" {}
+
 
 		[HideInInspector][NoScaleOffset] unity_Lightmaps("unity_Lightmaps", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset] unity_LightmapsInd("unity_LightmapsInd", 2DArray) = "" {}
@@ -21,11 +20,18 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 
 	SubShader
 	{
-		LOD 0
+		PackageRequirements
+		{
+			"com.unity.render-pipelines.universal": "[17.0,18.0]"
+		}
 
 		
 
-		Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Transparent" "Queue"="Transparent" }
+		
+
+		Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Transparent" "Queue"="Transparent" "UniversalMaterialType"="Unlit" "ShaderGraphShader"="true" }
+
+	LOD 0
 
 		Cull Off
 
@@ -50,13 +56,19 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 			ZWrite Off
 			Offset 0 , 0
 			ColorMask RGBA
+
 			
 
 			HLSLPROGRAM
 
-			#define ASE_VERSION 19905
-			#define ASE_SRP_VERSION 170004
+			#define _DISABLE_COLOR_TINT
+			#define ASE_VERSION 19909
+			#define ASE_SRP_VERSION 170400
 
+
+			#if ( UNITY_VERSION >= 60010000 )
+			#pragma multi_compile_instancing
+			#endif
 
 			#pragma vertex vert
 			#pragma fragment frag
@@ -77,6 +89,9 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 
 			#define SHADERPASS SHADERPASS_SPRITEUNLIT
 
+			#if ( UNITY_VERSION >= 60010000 )
+			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
+			#endif
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Texture.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -93,11 +108,14 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 			#include "Packages/com.unity.render-pipelines.universal/Shaders/2D/Include/SurfaceData2D.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Debug/Debugging2D.hlsl"
 
+			#define ASE_NEEDS_WORLD_POSITION
 			#define ASE_NEEDS_FRAG_WORLD_POSITION
 			#define ASE_NEEDS_TEXTURE_COORDINATES0
 			#define ASE_NEEDS_FRAG_TEXTURE_COORDINATES0
 			#define ASE_NEEDS_FRAG_COLOR
 
+
+			half4 _RendererColor;
 
 			sampler2D _BehindWaterTex;
 			sampler2D _MainTex;
@@ -200,14 +218,16 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				UNITY_SETUP_INSTANCE_ID(v);
 				UNITY_TRANSFER_INSTANCE_ID(v, o);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-				UNITY_SKINNED_VERTEX_COMPUTE( v );
+				UNITY_SKINNED_VERTEX_COMPUTE(v);
 
+				SetUpSpriteInstanceProperties();
 				v.positionOS = UnityFlipSprite( v.positionOS, unity_SpriteProps.xy );
 
 				float4 ase_positionCS = TransformObjectToHClip( ( v.positionOS ).xyz );
 				float4 screenPos = ComputeScreenPos( ase_positionCS );
 				o.ase_texcoord3 = screenPos;
 				
+
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 					float3 defaultVertexValue = v.positionOS;
 				#else
@@ -227,7 +247,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				o.positionCS = vertexInput.positionCS;
 				o.positionWS = vertexInput.positionWS;
 				o.texCoord0 = v.uv0;
-				o.color = v.color;
+				o.color = v.color * _RendererColor * unity_SpriteColor;
 				return o;
 			}
 
@@ -274,14 +294,15 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 temp_output_2_0_g5 = temp_output_6_0;
 				clip( (temp_output_2_0_g5).a - 0.01);
 				
+
 				float4 Color = temp_output_6_0;
+				float AlphaClipThreshold = 0.5;
 
-				#if ETC1_EXTERNAL_ALPHA
-					float4 alpha = SAMPLE_TEXTURE2D(_AlphaTex, sampler_AlphaTex, IN.texCoord0.xy);
-					Color.a = lerp( Color.a, alpha.r, _EnableAlphaTexture);
-				#endif
+			#if defined( ALPHA_CLIP_THRESHOLD )
+				clip( Color.a - AlphaClipThreshold );
+			#endif
 
-				#if defined(DEBUG_DISPLAY)
+			#if defined(DEBUG_DISPLAY)
 				SurfaceData2D surfaceData;
 				InitializeSurfaceData(Color.rgb, Color.a, surfaceData);
 				InputData2D inputData;
@@ -294,9 +315,17 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				{
 					return debugColor;
 				}
-				#endif
+			#endif
 
-				Color *= IN.color * unity_SpriteColor;
+			#if ETC1_EXTERNAL_ALPHA
+				float4 alpha = SAMPLE_TEXTURE2D(_AlphaTex, sampler_AlphaTex, IN.texCoord0.xy);
+				Color.a = lerp( Color.a, alpha.r, _EnableAlphaTexture);
+			#endif
+
+			#if !defined( _DISABLE_COLOR_TINT )
+				Color *= IN.color;
+			#endif
+
 				return Color;
 			}
 
@@ -315,18 +344,25 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 			ZWrite Off
 			Offset 0 , 0
 			ColorMask RGBA
+
 			
 
 			HLSLPROGRAM
 
-			#define ASE_VERSION 19905
-			#define ASE_SRP_VERSION 170004
+			#define _DISABLE_COLOR_TINT
+			#define ASE_VERSION 19909
+			#define ASE_SRP_VERSION 170400
 
+
+			#if ( UNITY_VERSION >= 60010000 )
+			#pragma multi_compile_instancing
+			#endif
 
 			#pragma vertex vert
 			#pragma fragment frag
 
-			#pragma multi_compile _ DEBUG_DISPLAY SKINNED_SPRITE
+			#pragma multi_compile _ SKINNED_SPRITE
+			#pragma multi_compile_fragment _ DEBUG_DISPLAY
 
             #define _SURFACE_TYPE_TRANSPARENT 1
             #define ATTRIBUTES_NEED_NORMAL
@@ -342,6 +378,9 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 
 			#define SHADERPASS SHADERPASS_SPRITEFORWARD
 
+			#if ( UNITY_VERSION >= 60010000 )
+			#include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
+			#endif
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 			#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Texture.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -358,11 +397,14 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 			#include "Packages/com.unity.render-pipelines.universal/Shaders/2D/Include/SurfaceData2D.hlsl"
 			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Debug/Debugging2D.hlsl"
 
+			#define ASE_NEEDS_WORLD_POSITION
 			#define ASE_NEEDS_FRAG_WORLD_POSITION
 			#define ASE_NEEDS_TEXTURE_COORDINATES0
 			#define ASE_NEEDS_FRAG_TEXTURE_COORDINATES0
 			#define ASE_NEEDS_FRAG_COLOR
 
+
+			half4 _RendererColor;
 
 			sampler2D _BehindWaterTex;
 			sampler2D _MainTex;
@@ -464,14 +506,16 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				UNITY_SETUP_INSTANCE_ID(v);
 				UNITY_TRANSFER_INSTANCE_ID(v, o);
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-				UNITY_SKINNED_VERTEX_COMPUTE( v );
+				UNITY_SKINNED_VERTEX_COMPUTE(v);
 
+				SetUpSpriteInstanceProperties();
 				v.positionOS = UnityFlipSprite( v.positionOS, unity_SpriteProps.xy );
 
 				float4 ase_positionCS = TransformObjectToHClip( ( v.positionOS ).xyz );
 				float4 screenPos = ComputeScreenPos( ase_positionCS );
 				o.ase_texcoord3 = screenPos;
 				
+
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 					float3 defaultVertexValue = v.positionOS;
 				#else
@@ -491,8 +535,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				o.positionCS = vertexInput.positionCS;
 				o.positionWS = vertexInput.positionWS;
 				o.texCoord0 = v.uv0;
-				o.color = v.color;
-
+				o.color = v.color * _RendererColor * unity_SpriteColor;
 				return o;
 			}
 
@@ -539,35 +582,44 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 temp_output_2_0_g5 = temp_output_6_0;
 				clip( (temp_output_2_0_g5).a - 0.01);
 				
+
 				float4 Color = temp_output_6_0;
+				float AlphaClipThreshold = 0.5;
 
-				#if ETC1_EXTERNAL_ALPHA
-					float4 alpha = SAMPLE_TEXTURE2D( _AlphaTex, sampler_AlphaTex, IN.texCoord0.xy );
-					Color.a = lerp( Color.a, alpha.r, _EnableAlphaTexture );
-				#endif
+			#if defined( ALPHA_CLIP_THRESHOLD )
+				clip( Color.a - AlphaClipThreshold );
+			#endif
 
+			#if defined(DEBUG_DISPLAY)
+				SurfaceData2D surfaceData;
+				InitializeSurfaceData(Color.rgb, Color.a, surfaceData);
+				InputData2D inputData;
+				InitializeInputData(positionWS.xy, half2(IN.texCoord0.xy), inputData);
+				half4 debugColor = 0;
 
-				#if defined(DEBUG_DISPLAY)
-					SurfaceData2D surfaceData;
-					InitializeSurfaceData(Color.rgb, Color.a, surfaceData);
-					InputData2D inputData;
-					InitializeInputData(positionWS.xy, half2(IN.texCoord0.xy), inputData);
-					half4 debugColor = 0;
+				SETUP_DEBUG_DATA_2D(inputData, positionWS, positionCS);
 
-					SETUP_DEBUG_DATA_2D(inputData, positionWS, positionCS);
+				if (CanDebugOverrideOutputColor(surfaceData, inputData, debugColor))
+				{
+					return debugColor;
+				}
+			#endif
 
-					if (CanDebugOverrideOutputColor(surfaceData, inputData, debugColor))
-					{
-						return debugColor;
-					}
-				#endif
+			#if ETC1_EXTERNAL_ALPHA
+				float4 alpha = SAMPLE_TEXTURE2D( _AlphaTex, sampler_AlphaTex, IN.texCoord0.xy );
+				Color.a = lerp( Color.a, alpha.r, _EnableAlphaTexture );
+			#endif
 
-				Color *= IN.color * unity_SpriteColor;
+			#if !defined( _DISABLE_COLOR_TINT )
+				Color *= IN.color;
+			#endif
+
 				return Color;
 			}
 
 			ENDHLSL
 		}
+
 		
         Pass
         {
@@ -579,9 +631,14 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 
             HLSLPROGRAM
 
-			#define ASE_VERSION 19905
-			#define ASE_SRP_VERSION 170004
+			#define _DISABLE_COLOR_TINT
+			#define ASE_VERSION 19909
+			#define ASE_SRP_VERSION 170400
 
+
+			#if ( UNITY_VERSION >= 60010000 )
+			#pragma multi_compile_instancing
+			#endif
 
 			#pragma vertex vert
 			#pragma fragment frag
@@ -647,6 +704,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 ase_texcoord2 : TEXCOORD2;
 				float4 ase_color : COLOR;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
+				UNITY_VERTEX_OUTPUT_STEREO
 			};
 
             int _ObjectId;
@@ -714,6 +772,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 				UNITY_SKINNED_VERTEX_COMPUTE(v);
 
+				SetUpSpriteInstanceProperties();
 				v.positionOS = UnityFlipSprite( v.positionOS, unity_SpriteProps.xy );
 
 				float4 ase_positionCS = TransformObjectToHClip( ( v.positionOS ).xyz );
@@ -741,14 +800,16 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				#endif
 
 				VertexPositionInputs vertexInput = GetVertexPositionInputs(v.positionOS);
-				float3 positionWS = TransformObjectToWorld(v.positionOS);
-				o.positionCS = TransformWorldToHClip(positionWS);
 
+				o.positionCS = vertexInput.positionCS;
 				return o;
 			}
 
 			half4 frag(VertexOutput IN) : SV_TARGET
 			{
+				UNITY_SETUP_INSTANCE_ID(IN);
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+
 				float4 screenPos = IN.ase_texcoord;
 				float4 ase_grabScreenPos = ASE_ComputeGrabScreenPos( screenPos );
 				float4 ase_grabScreenPosNorm = ase_grabScreenPos / ase_grabScreenPos.w;
@@ -785,10 +846,15 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 temp_output_2_0_g5 = temp_output_6_0;
 				clip( (temp_output_2_0_g5).a - 0.01);
 				
-				float4 Color = temp_output_6_0;
 
-				half4 outColor = half4(_ObjectId, _PassValue, 1.0, 1.0);
-				return outColor;
+				float4 Color = temp_output_6_0;
+				float AlphaClipThreshold = 0.5;
+
+				#if defined( ALPHA_CLIP_THRESHOLD )
+					clip( Color.a - AlphaClipThreshold );
+				#endif
+
+				return half4(_ObjectId, _PassValue, 1.0, 1.0);
 			}
 
             ENDHLSL
@@ -805,9 +871,14 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 
             HLSLPROGRAM
 
-			#define ASE_VERSION 19905
-			#define ASE_SRP_VERSION 170004
+			#define _DISABLE_COLOR_TINT
+			#define ASE_VERSION 19909
+			#define ASE_SRP_VERSION 170400
 
+
+			#if ( UNITY_VERSION >= 60010000 )
+			#pragma multi_compile_instancing
+			#endif
 
 			#pragma vertex vert
 			#pragma fragment frag
@@ -873,6 +944,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 ase_texcoord2 : TEXCOORD2;
 				float4 ase_color : COLOR;
 				UNITY_VERTEX_INPUT_INSTANCE_ID
+				UNITY_VERTEX_OUTPUT_STEREO
 			};
 
             float4 _SelectionID;
@@ -939,6 +1011,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 				UNITY_SKINNED_VERTEX_COMPUTE(v);
 
+				SetUpSpriteInstanceProperties();
 				v.positionOS = UnityFlipSprite( v.positionOS, unity_SpriteProps.xy );
 
 				float4 ase_positionCS = TransformObjectToHClip( ( v.positionOS ).xyz );
@@ -953,6 +1026,7 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				//setting value to unused interpolator channels and avoid initialization warnings
 				o.ase_texcoord1.w = 0;
 				o.ase_texcoord2.zw = 0;
+
 				#ifdef ASE_ABSOLUTE_VERTEX_POS
 					float3 defaultVertexValue = v.positionOS;
 				#else
@@ -966,14 +1040,16 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				#endif
 
 				VertexPositionInputs vertexInput = GetVertexPositionInputs(v.positionOS);
-				float3 positionWS = TransformObjectToWorld(v.positionOS);
-				o.positionCS = TransformWorldToHClip(positionWS);
 
+				o.positionCS = vertexInput.positionCS;
 				return o;
 			}
 
 			half4 frag(VertexOutput IN ) : SV_TARGET
 			{
+				UNITY_SETUP_INSTANCE_ID(IN);
+				UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+
 				float4 screenPos = IN.ase_texcoord;
 				float4 ase_grabScreenPos = ASE_ComputeGrabScreenPos( screenPos );
 				float4 ase_grabScreenPosNorm = ase_grabScreenPos / ase_grabScreenPos.w;
@@ -1010,22 +1086,32 @@ Shader "Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface"
 				float4 temp_output_2_0_g5 = temp_output_6_0;
 				clip( (temp_output_2_0_g5).a - 0.01);
 				
+
 				float4 Color = temp_output_6_0;
-				half4 outColor = unity_SelectionID;
-				return outColor;
+				float AlphaClipThreshold = 0.5;
+
+				#if defined( ALPHA_CLIP_THRESHOLD )
+					clip( Color.a - AlphaClipThreshold );
+				#endif
+
+				return unity_SelectionID;
 			}
 
             ENDHLSL
         }
 		
 	}
+	
+
+	
+
 	CustomEditor "UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI"
 	FallBack "Hidden/Shader Graph/FallbackError"
 	
 	Fallback Off
 }
 /*ASEBEGIN
-Version=19905
+Version=19909
 Node;AmplifyShaderEditor.CommentaryNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;14;-2688,-1664;Inherit;False;1517.527;996.7437;;16;13;10;12;2;4;11;5;26;86;87;88;89;90;91;92;93;PARAMETER;1,1,1,1;0;0
 Node;AmplifyShaderEditor.Vector2Node, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;86;-1840,-1568;Inherit;False;Constant;_DistortionDirection;Distortion Direction;9;0;Create;True;0;0;0;False;0;False;1,1;0,0;0;3;FLOAT2;0;FLOAT;1;FLOAT;2
 Node;AmplifyShaderEditor.CommentaryNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;116;-2704,-144;Inherit;False;1684;592;Comment;14;95;96;97;98;99;100;101;102;103;106;107;109;110;111;DISTORTION;1,1,1,1;0;0
@@ -1083,13 +1169,13 @@ Node;AmplifyShaderEditor.VertexColorNode, AmplifyShaderEditor, Version=0.0.0.0, 
 Node;AmplifyShaderEditor.GetLocalVarNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;23;-544,0;Inherit;False;22;M Bubble Color Final;1;0;OBJECT;;False;1;COLOR;0
 Node;AmplifyShaderEditor.SimpleMultiplyOpNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;6;-144,32;Inherit;False;2;2;0;COLOR;0,0,0,0;False;1;COLOR;0,0,0,0;False;1;COLOR;0
 Node;AmplifyShaderEditor.FunctionNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;115;16,192;Inherit;False;Alpha Split;-1;;5;07dab7960105b86429ac8eebd729ed6d;0;1;2;COLOR;0,0,0,0;False;2;FLOAT3;0;FLOAT;6
-Node;AmplifyShaderEditor.IntNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4;-2624,-1616;Inherit;False;Property;_StencilReference;Stencil Reference;1;0;Create;True;0;0;0;True;0;False;123;0;False;0;1;INT;0
+Node;AmplifyShaderEditor.IntNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;4;-2624,-1616;Inherit;False;Property;_StencilReference;Stencil Reference;1;0;Create;True;0;0;0;True;0;False;123;0;False;0;0;0;1;INT;0
 Node;AmplifyShaderEditor.ClipNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;113;208,32;Inherit;False;3;0;COLOR;0,0,0,0;False;1;FLOAT;0;False;2;FLOAT;0.01;False;1;COLOR;0
 Node;AmplifyShaderEditor.StickyNoteNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;118;-208,-208;Inherit;False;767.5488;129.407;;FX Pixel Water Bubble Sufrace;1,1,1,1;The bubble fx to be shown on the surface the of water.$Basically the same as FX Pixel Water Bubble except the stencil handling.;0;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;120;432,32;Float;False;True;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;16;Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface;cf964e524c8e69742b1d21fbe2ebcc4a;True;Sprite Unlit;0;0;Sprite Unlit;4;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;True;0;True;14;all;0;False;True;2;5;False;;10;False;;3;1;False;;10;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;2;False;;True;3;False;;True;True;0;False;;0;False;;True;1;LightMode=Universal2D;False;False;0;;0;0;Standard;3;Vertex Position;1;0;Debug Display;0;0;External Alpha;0;0;0;4;True;True;True;True;False;;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;121;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;Sprite Unlit Forward;0;1;Sprite Unlit Forward;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;True;0;True;14;all;0;False;True;2;5;False;;10;False;;3;1;False;;10;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;2;False;;True;3;False;;True;True;0;False;;0;False;;True;1;LightMode=UniversalForward;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;122;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;SceneSelectionPass;0;2;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;True;0;True;14;all;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
-Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;123;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;ScenePickingPass;0;3;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;3;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;True;0;True;14;all;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;120;432,32;Float;False;True;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;18;Cainos/Interactive Pixel Water/FX Pixel Water Bubble Surface;cf964e524c8e69742b1d21fbe2ebcc4a;True;Sprite Unlit;0;0;Sprite Unlit;5;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;5;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;UniversalMaterialType=Unlit;ShaderGraphShader=true;True;0;True;14;all;0;False;True;2;5;False;;10;False;;3;1;False;;10;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;2;False;;True;3;False;;True;True;0;False;;0;False;;False;True;1;LightMode=Universal2D;False;False;0;;0;0;Standard;5;Alpha Clipping;0;0;Disable Color Tint;1;0;Vertex Position;1;0;Debug Display;0;0;External Alpha;0;0;0;4;True;True;True;True;False;;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;121;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;Sprite Unlit Forward;0;1;Sprite Unlit Forward;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;5;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;UniversalMaterialType=Unlit;ShaderGraphShader=true;True;0;True;14;all;0;False;True;2;5;False;;10;False;;3;1;False;;10;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;True;True;True;True;0;False;;False;False;False;False;False;False;False;True;False;0;False;;255;False;;255;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;0;False;;False;True;2;False;;True;3;False;;True;True;0;False;;0;False;;False;True;1;LightMode=UniversalForward;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;122;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;SceneSelectionPass;0;2;SceneSelectionPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;5;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;UniversalMaterialType=Unlit;ShaderGraphShader=true;True;0;True;14;all;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=SceneSelectionPass;False;False;0;;0;0;Standard;0;False;0
+Node;AmplifyShaderEditor.TemplateMultiPassMasterNode, AmplifyShaderEditor, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null;123;432,32;Float;False;False;-1;3;UnityEditor.ShaderGraph.GenericShaderGraphMaterialGUI;0;1;New Amplify Shader;cf964e524c8e69742b1d21fbe2ebcc4a;True;ScenePickingPass;0;3;ScenePickingPass;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;5;RenderPipeline=UniversalPipeline;RenderType=Transparent=RenderType;Queue=Transparent=Queue=0;UniversalMaterialType=Unlit;ShaderGraphShader=true;True;0;True;14;all;0;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;2;False;;False;False;False;False;False;False;False;False;False;False;False;False;False;False;False;True;1;LightMode=Picking;False;False;0;;0;0;Standard;0;False;0
 WireConnection;87;0;86;0
 WireConnection;89;0;88;0
 WireConnection;96;0;95;0
@@ -1141,6 +1227,6 @@ WireConnection;6;1;9;0
 WireConnection;115;2;6;0
 WireConnection;113;0;6;0
 WireConnection;113;1;115;6
-WireConnection;120;1;113;0
+WireConnection;120;0;113;0
 ASEEND*/
-//CHKSM=2F0FF257C8461A0B00EDF3DB2B6C69D8B16D0AF9
+//CHKSM=0D99B313A4680D572C2A5D81D55AE7E80ED75804

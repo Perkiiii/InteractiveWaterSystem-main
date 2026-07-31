@@ -56,5 +56,5 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "InteractiveWaterSystem-main.sln"
+    "dotnet.defaultSolution": "InteractiveWaterSystem-main.slnx"
 }

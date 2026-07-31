@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 using Utils;
 using Random = UnityEngine.Random;
@@ -124,15 +125,18 @@ namespace InteractiveWater
         
         private void CreateRipplesFromMouseInput()
         {
-            var left = Input.GetMouseButtonDown(0);
-            var right = Input.GetMouseButtonDown(1);
+            var mouse = Mouse.current;
+            if (mouse == null) return;
+
+            var left = mouse.leftButton.wasPressedThisFrame;
+            var right = mouse.rightButton.wasPressedThisFrame;
             
             if (!left && !right) return;
             
             if (!_testRippleCamera) _testRippleCamera = Camera.main;
             if (!_testRippleCamera) return;
             
-            var ray = _testRippleCamera.ScreenPointToRay(Input.mousePosition);
+            var ray = _testRippleCamera.ScreenPointToRay(mouse.position.ReadValue());
 
             if (!Physics.Raycast(ray, out var hit, Mathf.Infinity, _testWaterLayer)) return;
             

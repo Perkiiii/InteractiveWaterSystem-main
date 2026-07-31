@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
-using UnityEngine.Rendering.RenderGraphModule.Util;
 using UnityEngine.Rendering.Universal;
-using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 namespace Cainos.InteractablePixelWater
 {
@@ -37,8 +36,10 @@ namespace Cainos.InteractablePixelWater
 
 
     //RENDER PASS
-    public class PixelWaterRenderPass : ScriptableRenderPass
+    public class PixelWaterRenderPass : ScriptableRenderPass2D
     {
+        static readonly int BehindWaterTexId = Shader.PropertyToID("_BehindWaterTex");
+
         LayerMask behindWaterMask;
         Color backgroundColor;
         int downsample = 1;
@@ -47,9 +48,10 @@ namespace Cainos.InteractablePixelWater
         {
             this.behindWaterMask = behindWaterMask;
             this.backgroundColor = backgroundColor;
-            this.downsample = downsample;
+            this.downsample = Mathf.Max(1, downsample);
 
-            renderPassEvent = RenderPassEvent.AfterRenderingOpaques;
+            renderPassEvent2D = RenderPassEvent2D.BeforeRenderingSprites;
+            renderPassSortingLayerID = 0;
         }
 
         private class PassData
@@ -64,22 +66,23 @@ namespace Cainos.InteractablePixelWater
         {
             // Fetch camera and resource data
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-            UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
             UniversalRenderingData renderingData = frameData.Get<UniversalRenderingData>();
             UniversalLightData lightData = frameData.Get<UniversalLightData>();
 
             //color rt
             var texDesc = cameraData.cameraTargetDescriptor;
-            texDesc.depthBufferBits = 0;
             texDesc.colorFormat = RenderTextureFormat.ARGB32;
-            texDesc.width = cameraData.cameraTargetDescriptor.width / downsample;
-            texDesc.height = cameraData.cameraTargetDescriptor.height / downsample;
+            texDesc.depthStencilFormat = GraphicsFormat.None;
+            texDesc.msaaSamples = 1;
+            texDesc.bindMS = false;
+            texDesc.width = Mathf.Max(1, cameraData.cameraTargetDescriptor.width / downsample);
+            texDesc.height = Mathf.Max(1, cameraData.cameraTargetDescriptor.height / downsample);
             var behindWaterTex = UniversalRenderer.CreateRenderGraphTexture(renderGraph, texDesc, "Behind Water Tex", false, FilterMode.Bilinear, TextureWrapMode.Clamp);
 
             //depth rt
             var depthDesc = texDesc;
-            depthDesc.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.None;
-            depthDesc.depthBufferBits = 24;
+            depthDesc.graphicsFormat = GraphicsFormat.None;
+            depthDesc.depthStencilFormat = GraphicsFormat.D24_UNorm_S8_UInt;
             var behindWaterDepthTex = UniversalRenderer.CreateRenderGraphTexture( renderGraph, depthDesc, "Behind Water Depth Tex", true, FilterMode.Point, TextureWrapMode.Clamp);
 
 
@@ -103,34 +106,25 @@ namespace Cainos.InteractablePixelWater
                 };
                 var drawSettings = RenderingUtils.CreateDrawingSettings(shaderTags, renderingData, cameraData, lightData, sortingSettings.criteria);
                 drawSettings.overrideMaterial = null;
-                var filterSettings = new FilteringSettings(RenderQueueRange.all, behindWaterMask);
+                var filterSettings = FilteringSettings.defaultValue;
+                filterSettings.renderQueueRange = RenderQueueRange.all;
+                filterSettings.layerMask = behindWaterMask;
+                filterSettings.renderingLayerMask = uint.MaxValue;
+                filterSettings.sortingLayerRange = SortingLayerRange.all;
 
                 var rendererListParams = new RendererListParams(renderingData.cullResults, drawSettings, filterSettings);
                 passData.objectsToDraw = renderGraph.CreateRendererList(rendererListParams);
 
                 builder.UseRendererList(passData.objectsToDraw);
+                builder.UseAllGlobalTextures(true);
                 builder.SetRenderAttachment(passData.behindWaterTex, 0, AccessFlags.Write);
                 builder.SetRenderAttachmentDepth(passData.behindWaterDepthTex, AccessFlags.ReadWrite);
+                builder.SetGlobalTextureAfterPass(passData.behindWaterTex, BehindWaterTexId);
                 builder.AllowPassCulling(false);
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                builder.SetRenderFunc(static (PassData data, RasterGraphContext context) =>
                 {
-                    context.cmd.ClearRenderTarget(true, true, passData.backgroundColor);
+                    context.cmd.ClearRenderTarget(true, true, data.backgroundColor);
                     context.cmd.DrawRendererList(data.objectsToDraw);
-                });
-            }
-
-            //pass 2
-            //set behindWaterTex as global texture
-            using (var builder = renderGraph.AddRasterRenderPass<PassData>("Set Global Texture", out var passData))
-            {
-                passData.behindWaterTex = behindWaterTex;
-
-                builder.AllowPassCulling(false);
-                builder.AllowGlobalStateModification(true);
-                builder.UseTexture(passData.behindWaterTex, AccessFlags.Read);
-                builder.SetRenderFunc((PassData data, RasterGraphContext ctx) =>
-                {
-                    ctx.cmd.SetGlobalTexture("_BehindWaterTex", data.behindWaterTex);
                 });
             }
         }

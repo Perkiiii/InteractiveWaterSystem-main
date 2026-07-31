@@ -24,7 +24,7 @@ namespace Cainos.InteractivePixelWater
 
         private string GeneratedMeshName
         {
-            get { return $"[Water Mesh] {GetInstanceID()}"; }
+            get { return $"[Water Mesh] {GetEntityId()}"; }
         }
 
         [Space]
