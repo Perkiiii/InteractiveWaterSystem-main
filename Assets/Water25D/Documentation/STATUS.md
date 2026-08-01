@@ -25,7 +25,9 @@
 
 ### Inspector authoring UX slice
 
-- Replaced the generic controller editor with persistent, standard-Unity foldouts for Basic, Rendering, Ambient Waves, Contact Ripples, Reflection, FX, Physics, Interaction, Events, Performance, Validation, and Advanced.
+- Replaced the dashboard-style controller editor with a minimal standard-Unity inspector: a disabled Script row followed by six persistent top-level foldouts named Basic, Rendering, FX, Physics, Event, and Action.
+- Moved Ambient Waves, Contact Ripples, and Reflection into compact nested Rendering foldouts; combined Physics and Interaction under Physics; moved performance estimates, validation, and generated hierarchy details into nested Action foldouts.
+- Removed the custom Water25D header, authoring subtitle, selected-object/status strip, warning/material badges, toolbar, and section cards without changing controller runtime code.
 - Added theme-aware editor styles, editor-only foldout/handle state, inline style and quality profile editing, shared-asset warnings, duplicate/make-unique/default actions, and standalone profile inspectors.
 - Added conditional controls for reflection, FX, physics, and ripple quality, plus calculated geometry/state-memory/scheduling estimates that are explicitly labeled as estimates.
 - Added grouped validation with safe Undo-backed repairs, generated-hierarchy checks, material/profile/shader checks, and project setup warnings.
@@ -44,7 +46,7 @@
 - Visual validation scene: `Assets/Water25D/Samples/Water25D_VisualValidation.unity`. Unity inspection confirmed persistent materials on both renderers, all five default controller asset references, and `{fileID: 0}` generated mesh slots after save. The [persistent-material capture](Validation/water25d-persistent-materials.png) shows the saved scene rendering without magenta error output.
 - In Play Mode, `CreateContactRippleAt` returned `true`; after a subsequent Unity frame, GPU readback of the 320 x 104 RGHalf state contained 132,848 nonzero bytes out of 133,120. This confirms impact state reached the CRT. A final target-device visual ripple comparison has not been claimed.
 - Package-owned runtime and editor code returned no legacy/vendor references. The only package matches are intentional portability and audit instructions in documentation.
-- Authoring captures: [basic/rendering](Validation/water25d-inspector-basic-rendering.png), [ripples/performance](Validation/water25d-inspector-ripples-performance.png), [validation warning](Validation/water25d-inspector-validation-warning.png), and [scene handles](Validation/water25d-scene-handles.png). The validation capture intentionally shows the recoverable missing-optional-FX warning.
+- Existing authoring captures: [basic/rendering](Validation/water25d-inspector-basic-rendering.png), [ripples/performance](Validation/water25d-inspector-ripples-performance.png), [validation warning](Validation/water25d-inspector-validation-warning.png), and [scene handles](Validation/water25d-scene-handles.png). These captures predate the six-section layout correction and must be regenerated before visual parity is claimed.
 
 ## Not completed
 
@@ -54,6 +56,7 @@
 - Full planar-reflection visual comparison, Frame Debugger capture, and allocation profiling.
 - Benchmark measurements. The generator is present, but no performance numbers are recorded.
 - Before/after screenshots of the legacy generic inspector were not available, so visual parity is documented by the current authoring captures and workflow description rather than a pixel comparison.
+- A post-correction capture of the six collapsed top-level bars has not yet been produced.
 - Full multi-selection/prefab-stage authoring review, measured profiler capture, and target-device validation remain outstanding.
 - Gameplay-camera-aware visibility scheduling and vertical-crossing-weighted impact strength remain follow-up work.
 - Automatic project layer, sorting-layer, URP renderer-feature, or Camera Sorting Layer Texture setup.

@@ -14,16 +14,15 @@ The top surface is local XZ, from `(0, waterline, 0)` to `(width, waterline, vis
 
 ## Inspector and authoring workflow
 
-The controller Inspector is organized into persistent foldouts for Basic, Rendering, Ambient Waves, Contact Ripples, Reflection, FX, Physics, Interaction, Events, Performance, Validation, and Advanced. Profile values are editable inline, while shared profile assets display a warning and offer **Make Unique Copy**, **Duplicate**, **Create New**, and **Package Default** actions. See [AUTHORING.md](AUTHORING.md) for the complete workflow.
+The controller Inspector starts with a disabled Script row followed by six persistent foldouts: Basic, Rendering, FX, Physics, Event, and Action. Ambient Waves, Contact Ripples, and Reflection are nested under Rendering. Diagnostics and Advanced are nested under Action. Profile values are editable inline, while shared profile assets display a warning only while their expanded settings are being edited and offer **Make Unique Copy**, **Duplicate**, **Create New**, and **Package Default** actions. See [AUTHORING.md](AUTHORING.md) for the complete workflow.
 
-The Performance section reports calculated geometry, ripple-resolution, memory, and scheduling estimates. These are authoring estimates, not measured profiler data. The Validation section groups errors, warnings, and information results and provides Undo-backed safe repairs. Scene handles expose width, visual depth, physical depth, and waterline with 0.1-unit snapping and Undo.
+**Action > Diagnostics** reports calculated geometry, ripple-resolution, memory, scheduling, and planar-reflection estimates. These are authoring estimates, not measured profiler data; it also groups validation findings and provides Undo-backed safe repairs. Scene handles expose width, visual depth, physical depth, and waterline with 0.1-unit snapping and Undo.
 
 ## Manual verification
 
-- Open `Assets/Water25D/Samples/Water25D_VisualValidation.unity` and select the `Water25D` root. Confirm the generated hierarchy, Basic fields, inline Rendering profile fields, and the persistent foldout sections in the Inspector.
+- Open `Assets/Water25D/Samples/Water25D_VisualValidation.unity` and select the `Water25D` root. Confirm the disabled Script row, six collapsed top-level foldouts, generated hierarchy, Basic fields, and inline Rendering profile fields in the Inspector.
 - Enable **Show Scene Handles** in Basic. In the Scene view, confirm the labeled top/front surfaces and width, visual-depth, physical-depth, and waterline handles; move one by 0.1 units and use Undo to restore it.
-- Open Contact Ripples and Performance. Confirm the quality profile controls, calculated ripple resolution/state estimate, and runtime-only simulator note. Enter Play Mode and verify the reset control becomes available only while the simulator is active.
-- Open Validation. The sample may show the recoverable **Optional FX definitions not assigned** warning when effects are enabled without project-owned definitions. Confirm **Validate** and **Fix All Safe Issues** are available and do not silently modify unrelated assets.
+- Open Rendering > Contact Ripples and Action > Diagnostics. Confirm the quality profile controls, calculated ripple resolution/state estimate, and validation actions. Enter Play Mode and verify the reset and center-test controls are available only while the simulator can run.
 - Enter Play Mode and use an oblique `Main Camera` view. Expect a coherent analytical wave along the XZ top surface and XY front surface seam.
 - Call `Water25DController.CreateContactRippleAt` from a test script or drop a dynamic `Rigidbody2D` through the thin trigger. Expect one logical surface-enter event for a multi-collider body and a CRT impact state update.
 - Switch Reflection Mode to `Planar`, assign the scene camera, and inspect the Frame Debugger for one reflection camera render per compatible group. Switch back to `Stylized` and confirm no reflection camera is created.

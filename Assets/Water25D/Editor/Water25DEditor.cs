@@ -1,8 +1,7 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Events;
-using Water25D.FX;
 using Water25D.Rendering;
 
 namespace Water25D.Editor
@@ -12,6 +11,7 @@ namespace Water25D.Editor
     public sealed class Water25DEditor : UnityEditor.Editor
     {
         private const string SetupDocumentationPath = "Assets/Water25D/Documentation/SETUP.md";
+        private const string TopLevelFoldoutPrefix = "Controller.PixelWaterStyle.TopLevel.";
 
         private SerializedObject _styleProfileSerializedObject;
         private SerializedObject _qualityProfileSerializedObject;
@@ -28,6 +28,7 @@ namespace Water25D.Editor
 
             Undo.undoRedoPerformed += OnUndoRedo;
             RefreshProfileSerializedObjects();
+            RefreshValidation();
         }
 
         private void OnDisable()
@@ -35,6 +36,8 @@ namespace Water25D.Editor
             Undo.undoRedoPerformed -= OnUndoRedo;
             _styleProfileSerializedObject = null;
             _qualityProfileSerializedObject = null;
+            _cachedStyleProfile = null;
+            _cachedQualityProfile = null;
         }
 
         public override void OnInspectorGUI()
@@ -43,98 +46,41 @@ namespace Water25D.Editor
             serializedObject.Update();
             RefreshProfileSerializedObjects();
 
-            var controller = target as Water25DController;
-            _validationResults = controller != null
-                ? Water25DValidation.Validate(controller)
-                : new List<Water25DValidationResult>();
-
-            DrawHeader(controller);
+            DrawScriptProperty();
             DrawBasicSection();
             DrawRenderingSection();
-            DrawAmbientWavesSection();
-            DrawContactRipplesSection(controller);
-            DrawReflectionSection(controller);
             DrawFxSection();
             DrawPhysicsSection();
-            DrawInteractionSection();
-            DrawEventsSection();
-            DrawPerformanceSection(controller);
-            DrawValidationSection(controller);
-            DrawAdvancedSection(controller);
+            DrawEventSection();
+            DrawActionSection();
 
             var changed = serializedObject.ApplyModifiedProperties();
             if (changed)
             {
                 Water25DInspectorUtility.MarkControllerPropertiesChanged(serializedObject);
                 RefreshProfileSerializedObjects();
+                RefreshValidation();
                 SceneView.RepaintAll();
             }
         }
 
-        private void DrawHeader(Water25DController controller)
+        private void DrawScriptProperty()
         {
-            EditorGUILayout.BeginVertical(Water25DInspectorStyles.Header);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.BeginVertical();
-            EditorGUILayout.LabelField("Water25D", new GUIStyle(EditorStyles.boldLabel) { fontSize = 15 });
-            EditorGUILayout.LabelField("2.5D Water Authoring", Water25DInspectorStyles.Subtitle);
-            EditorGUILayout.EndVertical();
-            GUILayout.FlexibleSpace();
-            DrawValidationBadge(GetAggregateSeverity());
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space(2f);
-            EditorGUILayout.LabelField(controller != null ? controller.name : "Multiple Water25D objects", EditorStyles.miniBoldLabel);
-            EditorGUILayout.BeginHorizontal(Water25DInspectorStyles.StatusRow);
-            DrawAssetStatus("Style", serializedObject.FindProperty("_styleProfile"));
-            DrawAssetStatus("Quality", serializedObject.FindProperty("_qualityProfile"));
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndVertical();
-
-            EditorGUILayout.BeginHorizontal(Water25DInspectorStyles.Toolbar);
-            if (GUILayout.Button(new GUIContent("Defaults", "Assign only missing package-owned defaults."), EditorStyles.toolbarButton))
+            var scriptProperty = serializedObject.FindProperty("m_Script");
+            if (scriptProperty == null)
             {
-                AssignPackageDefaults();
+                return;
             }
 
-            if (GUILayout.Button(new GUIContent("Repair", "Repair generated children and rebuild the transient preview."), EditorStyles.toolbarButton))
+            using (new EditorGUI.DisabledScope(true))
             {
-                RepairHierarchy();
-            }
-
-            if (GUILayout.Button(new GUIContent("Refresh", "Reapply property blocks and refresh the edit-mode preview."), EditorStyles.toolbarButton))
-            {
-                RefreshPreview();
-            }
-
-            using (new EditorGUI.DisabledScope(targets.Length != 1))
-            {
-                if (GUILayout.Button(new GUIContent("Top", "Select the generated TopSurface child."), EditorStyles.toolbarButton))
-                {
-                    Water25DInspectorUtility.SelectObject(controller != null ? controller.TopSurface : null);
-                }
-
-                if (GUILayout.Button(new GUIContent("Front", "Select the generated FrontSurface child."), EditorStyles.toolbarButton))
-                {
-                    Water25DInspectorUtility.SelectObject(controller != null ? controller.FrontSurface : null);
-                }
-            }
-
-            if (GUILayout.Button(new GUIContent("Setup", "Open the Water25D setup and authoring documentation."), EditorStyles.toolbarButton))
-            {
-                Water25DInspectorUtility.OpenDocumentation(SetupDocumentationPath);
-            }
-
-            EditorGUILayout.EndHorizontal();
-            if (targets.Length > 1)
-            {
-                EditorGUILayout.HelpBox("Multiple Water25D objects are selected. Shared profile edits and single-object authoring actions are guarded below.", MessageType.Info);
+                EditorGUILayout.PropertyField(scriptProperty);
             }
         }
 
         private void DrawBasicSection()
         {
-            var open = BeginSection("Basic", "Basic", true);
+            var open = BeginTopLevelSection("Basic", "Basic");
             if (open)
             {
                 var size = serializedObject.FindProperty("_topSurfaceSize");
@@ -148,6 +94,7 @@ namespace Water25D.Editor
                 Property("_waterlineLocalY", "Waterline", "Local Y coordinate of the waterline. The root transform is not recentered when this changes.");
                 Property("_interactionDepth01", "Interaction Lane", "Normalized 0–1 depth lane used to map flat 2D gameplay positions into the visual XZ surface.");
                 Property("_surfaceTriggerThickness", "Crossing Band Thickness", "Thickness of the separate surface-crossing trigger around the waterline.");
+                Property("_synchronizeGeneratedChildLayers", "Synchronize Generated Child Layers", "Keep generated children on the controller's layer. Disable only when a deliberate layer layout is authored manually.");
 
                 var showHandles = Water25DInspectorState.ShowSceneHandles;
                 var nextShowHandles = EditorGUILayout.ToggleLeft(new GUIContent("Show Scene Handles", "Show optional width, visual-depth, physical-depth and waterline handles in the Scene View."), showHandles);
@@ -156,504 +103,454 @@ namespace Water25D.Editor
                     Water25DInspectorState.ShowSceneHandles = nextShowHandles;
                     SceneView.RepaintAll();
                 }
-
-                EditorGUILayout.HelpBox("Top surface: local XZ. Front surface: local XY. Gameplay remains a flat 2D surface mapped through the explicit Interaction Lane.", MessageType.Info);
             }
 
-            EndSection(open);
+            EndTopLevelSection();
         }
 
         private void DrawRenderingSection()
         {
-            var open = BeginSection("Rendering", "Rendering", true);
+            var open = BeginTopLevelSection("Rendering", "Rendering");
             if (open)
             {
-                EditorGUILayout.LabelField("Appearance Profile", Water25DInspectorStyles.Subsection);
                 var styleProperty = serializedObject.FindProperty("_styleProfile");
                 if (styleProperty != null)
                 {
                     EditorGUILayout.PropertyField(styleProperty, new GUIContent("Style Profile", "Shared colors and analytical wave settings. Changes affect every Water25D object using this asset."));
-                }
-
-                var styleProfile = styleProperty != null ? styleProperty.objectReferenceValue as WaterStyleProfile : null;
-                DrawProfileActions(styleProperty, styleProfile, true);
-                if (styleProfile != null && _styleProfileSerializedObject != null)
-                {
-                    DrawSharedProfileNotice(styleProfile, true);
-                    WaterStyleProfileEditor.DrawSurfaceFields(_styleProfileSerializedObject);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Assign a WaterStyleProfile to edit the current appearance inline.", MessageType.Warning);
-                }
-
-                EditorGUILayout.Space(3f);
-                EditorGUILayout.LabelField("Materials and Sorting", Water25DInspectorStyles.Subsection);
-                DrawMaterialRow("Top Material Template", "_topMaterialTemplate", Water25DInspectorUtility.TopShaderName, Water25DInspectorUtility.TopMaterialPath, styleProfile != null ? styleProfile.TopMaterialTemplate : null);
-                DrawMaterialRow("Front Material Template", "_frontMaterialTemplate", Water25DInspectorUtility.FrontShaderName, Water25DInspectorUtility.FrontMaterialPath, styleProfile != null ? styleProfile.FrontMaterialTemplate : null);
-                DrawMaterialRow("Ripple Simulation Material", "_rippleSimulationMaterialTemplate", Water25DInspectorUtility.RippleShaderName, Water25DInspectorUtility.RippleMaterialPath, null);
-                DrawSortingLayerProperty("Top Sorting Layer", "_topSortingLayerName", "Sorting layer for the XZ top renderer.");
-                Property("_topSortingOrder", "Top Sorting Order", "Ordering within the selected top sorting layer.");
-                DrawSortingLayerProperty("Front Sorting Layer", "_frontSortingLayerName", "Sorting layer for the XY front renderer.");
-                Property("_frontSortingOrder", "Front Sorting Order", "Ordering within the selected front sorting layer.");
-
-                if (styleProfile != null && _styleProfileSerializedObject != null)
-                {
-                    EditorGUILayout.Space(2f);
-                    EditorGUILayout.LabelField("Optional Profile Material Templates", Water25DInspectorStyles.Subsection);
-                    WaterStyleProfileEditor.DrawMaterialFields(_styleProfileSerializedObject);
-                }
-
-                EditorGUILayout.HelpBox("The current shader set provides the top/front presentation, analytical waves, ripple amplitude, foam edge and optional reflection. Distortion, blur, caustics and light shafts are not implemented by Water25D yet.", MessageType.Info);
-            }
-
-            EndSection(open);
-        }
-
-        private void DrawAmbientWavesSection()
-        {
-            var open = BeginSection("Ambient Waves", "Ambient Waves", false);
-            if (open)
-            {
-                var styleProfile = GetStyleProfile();
-                if (styleProfile == null || _styleProfileSerializedObject == null)
-                {
-                    EditorGUILayout.HelpBox("Assign a style profile to edit analytical ambient waves.", MessageType.Warning);
-                }
-                else
-                {
-                    DrawSharedProfileNotice(styleProfile, true);
-                    WaterStyleProfileEditor.DrawAmbientFields(_styleProfileSerializedObject);
-                    if (GUILayout.Button(new GUIContent("Reset Wave Settings", "Restore amplitude, wavelength, speed and direction from Water25D_DefaultStyle.asset."), Water25DInspectorStyles.SmallButton))
-                    {
-                        WaterStyleProfileEditor.ResetAmbientWaveSettings(_styleProfileSerializedObject);
-                    }
-                }
-
-                var qualityProfile = GetQualityProfile();
-                if (qualityProfile != null && _qualityProfileSerializedObject != null)
-                {
-                    EditorGUILayout.LabelField("Quality Profile", Water25DInspectorStyles.Subsection);
-                    WaterQualityProfileEditor.DrawAmbientBandField(_qualityProfileSerializedObject);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Ambient band count comes from the assigned quality profile.", MessageType.Info);
-                }
-            }
-
-            EndSection(open);
-        }
-
-        private void DrawContactRipplesSection(Water25DController controller)
-        {
-            var open = BeginSection("Contact Ripples", "Contact Ripples", false);
-            if (open)
-            {
-                var enabledProperty = serializedObject.FindProperty("_enableRippleSimulation");
-                if (enabledProperty != null)
-                {
-                    EditorGUILayout.PropertyField(enabledProperty, new GUIContent("Ripples Enabled", "Allocate and update the instance-owned CRT ripple state in Play Mode."));
-                }
-
-                var enabled = enabledProperty == null || enabledProperty.boolValue;
-                if (!enabled)
-                {
-                    EditorGUILayout.HelpBox("Contact ripple simulation is disabled. Ripple-specific strength controls are hidden, while the assigned quality profile remains available for later use.", MessageType.Info);
-                }
-                else
-                {
-                    Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
-                    Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
-                    Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
+                    DrawProfileActions(styleProperty, styleProperty.objectReferenceValue as WaterStyleProfile, true);
                 }
 
                 var qualityProperty = serializedObject.FindProperty("_qualityProfile");
                 if (qualityProperty != null)
                 {
                     EditorGUILayout.PropertyField(qualityProperty, new GUIContent("Quality Profile", "Shared ripple scheduling, resolution, wave behaviour and geometry settings."));
-                }
-
-                var qualityProfile = qualityProperty != null ? qualityProperty.objectReferenceValue as WaterQualityProfile : null;
-                DrawProfileActions(qualityProperty, qualityProfile, false);
-                if (qualityProfile != null && _qualityProfileSerializedObject != null)
-                {
-                    DrawSharedProfileNotice(qualityProfile, false);
-                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Resolution", "ContactRipples.Resolution", true, WaterQualityProfileEditor.DrawRippleResolutionFields);
-                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Scheduling", "ContactRipples.Scheduling", false, WaterQualityProfileEditor.DrawSchedulingFields);
-                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Wave Behaviour", "ContactRipples.WaveBehaviour", false, WaterQualityProfileEditor.DrawWaveBehaviourFields);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Assign a quality profile to configure the ripple state.", MessageType.Warning);
+                    DrawProfileActions(qualityProperty, qualityProperty.objectReferenceValue as WaterQualityProfile, false);
                 }
 
                 var styleProfile = GetStyleProfile();
-                if (styleProfile != null && _styleProfileSerializedObject != null)
+                var appearanceOpen = BeginNestedSection("Rendering.Appearance", "Top / Front Appearance");
+                if (appearanceOpen && styleProfile != null && _styleProfileSerializedObject != null)
                 {
-                    EditorGUILayout.LabelField("Visual Amplitude", Water25DInspectorStyles.Subsection);
-                    WaterStyleProfileEditor.DrawRippleFields(_styleProfileSerializedObject);
+                    DrawSharedProfileNotice(styleProfile, true);
+                    WaterStyleProfileEditor.DrawSurfaceFields(_styleProfileSerializedObject);
                 }
 
-                DrawRippleRuntimeStatus(controller, enabled);
+                var materialOpen = BeginNestedSection("Rendering.Materials", "Material Templates and Sorting");
+                if (materialOpen)
+                {
+                    DrawMaterialRow("Top Material Template", "_topMaterialTemplate", Water25DInspectorUtility.TopMaterialPath, styleProfile != null ? styleProfile.TopMaterialTemplate : null);
+                    DrawMaterialRow("Front Material Template", "_frontMaterialTemplate", Water25DInspectorUtility.FrontMaterialPath, styleProfile != null ? styleProfile.FrontMaterialTemplate : null);
+                    DrawMaterialRow("Ripple Simulation Material", "_rippleSimulationMaterialTemplate", Water25DInspectorUtility.RippleMaterialPath, null);
+                    DrawSortingLayerProperty("Top Sorting Layer", "_topSortingLayerName", "Sorting layer for the XZ top renderer.");
+                    Property("_topSortingOrder", "Top Sorting Order", "Ordering within the selected top sorting layer.");
+                    DrawSortingLayerProperty("Front Sorting Layer", "_frontSortingLayerName", "Sorting layer for the XY front renderer.");
+                    Property("_frontSortingOrder", "Front Sorting Order", "Ordering within the selected front sorting layer.");
+
+                    if (styleProfile != null && _styleProfileSerializedObject != null)
+                    {
+                        WaterStyleProfileEditor.DrawMaterialFields(_styleProfileSerializedObject);
+                    }
+                }
+
+                DrawAmbientWavesSection();
+                DrawContactRipplesSection();
+                DrawReflectionSection();
+            }
+
+            EndTopLevelSection();
+        }
+
+        private void DrawAmbientWavesSection()
+        {
+            var open = BeginNestedSection("Rendering.AmbientWaves", "Ambient Waves");
+            if (!open)
+            {
+                return;
+            }
+
+            var styleProfile = GetStyleProfile();
+            if (styleProfile != null && _styleProfileSerializedObject != null)
+            {
+                DrawSharedProfileNotice(styleProfile, true);
+                WaterStyleProfileEditor.DrawAmbientFields(_styleProfileSerializedObject);
+                if (GUILayout.Button(new GUIContent("Reset Wave Settings", "Restore amplitude, wavelength, speed and direction from the Water25D default style asset."), Water25DInspectorStyles.SmallButton))
+                {
+                    WaterStyleProfileEditor.ResetAmbientWaveSettings(_styleProfileSerializedObject);
+                }
+            }
+
+            var qualityProfile = GetQualityProfile();
+            if (qualityProfile != null && _qualityProfileSerializedObject != null)
+            {
+                WaterQualityProfileEditor.DrawAmbientBandField(_qualityProfileSerializedObject);
+            }
+        }
+
+        private void DrawContactRipplesSection()
+        {
+            var open = BeginNestedSection("Rendering.ContactRipples", "Contact Ripples");
+            if (!open)
+            {
+                return;
+            }
+
+            Property("_enableRippleSimulation", "Ripples Enabled", "Allocate and update the instance-owned CRT ripple state in Play Mode.");
+            Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
+            Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
+            Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
+
+            var qualityProfile = GetQualityProfile();
+            if (qualityProfile != null && _qualityProfileSerializedObject != null)
+            {
+                DrawSharedProfileNotice(qualityProfile, false);
+                DrawNestedQualitySection(_qualityProfileSerializedObject, "Resolution", "Rendering.ContactRipples.Resolution", WaterQualityProfileEditor.DrawRippleResolutionFields);
+                DrawNestedQualitySection(_qualityProfileSerializedObject, "Scheduling", "Rendering.ContactRipples.Scheduling", WaterQualityProfileEditor.DrawSchedulingFields);
+                DrawNestedQualitySection(_qualityProfileSerializedObject, "Wave Behaviour", "Rendering.ContactRipples.WaveBehaviour", WaterQualityProfileEditor.DrawWaveBehaviourFields);
+            }
+
+            var styleProfile = GetStyleProfile();
+            if (styleProfile != null && _styleProfileSerializedObject != null)
+            {
+                WaterStyleProfileEditor.DrawRippleFields(_styleProfileSerializedObject);
+            }
+        }
+
+        private void DrawReflectionSection()
+        {
+            var open = BeginNestedSection("Rendering.Reflection", "Reflection");
+            if (!open)
+            {
+                return;
+            }
+
+            var modeProperty = serializedObject.FindProperty("_reflectionMode");
+            if (modeProperty != null)
+            {
+                EditorGUILayout.PropertyField(modeProperty, new GUIContent("Reflection Mode", "Disabled, camera-free Stylized fallback, or shared adaptive Planar reflection."));
+            }
+
+            var mode = modeProperty != null ? (WaterReflectionMode)modeProperty.enumValueIndex : WaterReflectionMode.Stylized;
+            if (mode == WaterReflectionMode.Stylized)
+            {
+                Property("_reflectionStrength", "Reflection Strength", "Strength of the current camera-free stylized reflection fallback.");
+                return;
+            }
+
+            if (mode == WaterReflectionMode.Planar)
+            {
+                Property("_reflectionCameraSource", "Camera Source", "Camera used to define the shared planar reflection group. Assign explicitly for deterministic grouping.");
+                Property("_reflectionCullingMask", "Planar Culling Mask", "Layers rendered by the shared reflection camera. Exclude water and reflection-helper layers when recursion is possible.");
+                Property("_reflectionResolutionScale", "Resolution Scale", "Fraction of the source camera resolution used by the shared reflection texture.");
+                Property("_reflectionUpdateIntervalFrames", "Update Interval", "Minimum frame interval between adaptive reflection renders unless the camera moves.");
+                Property("_reflectionStrength", "Reflection Strength", "Blend strength applied to the planar reflection.");
+                return;
+            }
+
+            Property("_reflectionStrength", "Reflection Strength", "Blend strength applied to the reflection when enabled.");
+        }
+
+        private void DrawFxSection()
+        {
+            var open = BeginTopLevelSection("FX", "FX");
+            if (open)
+            {
+                Property("_enableEffects", "Effects Enabled", "Enable pooled splash and bubble presentation effects for interaction events.");
+                DrawFxDefinitionRow("Splash Definition", "_splashDefinition", "Splash", "Definition used for surface enter and exit effects.");
+                DrawFxDefinitionRow("Bubble Definition", "_bubbleDefinition", "Bubble", "Definition used for submerged effects.");
+                Property("_maximumFxPoolSize", "Pool Size", "Upper bound for each fixed-capacity effect pool. Exhaustion rejects requests instead of instantiating during gameplay.");
+            }
+
+            EndTopLevelSection();
+        }
+
+        private void DrawPhysicsSection()
+        {
+            var open = BeginTopLevelSection("Physics", "Physics");
+            if (open)
+            {
+                EditorGUILayout.LabelField("Buoyancy", EditorStyles.boldLabel);
+                Property("_enableBuoyancy", "Enable Buoyancy", "Enable the full underwater trigger and its BuoyancyEffector2D.");
+                Property("_buoyancyDensity", "Density", "Density used by the generated BuoyancyEffector2D.");
+                Property("_buoyancyLayers", "Buoyancy Layers", "Rigidbody2D layers eligible for the full underwater volume.");
+                Property("_buoyancyLinearDamping", "Effector Linear Damping", "Linear damping applied by BuoyancyEffector2D when custom drag is disabled or kept modest.");
+                Property("_buoyancyAngularDamping", "Effector Angular Damping", "Angular damping applied by BuoyancyEffector2D when custom drag is disabled or kept modest.");
+
+                EditorGUILayout.LabelField("Drag", EditorStyles.boldLabel);
+                Property("_enableCustomDrag", "Enable Custom Drag", "Apply optional per-Rigidbody2D drag from WaterPhysicsVolume2D in addition to effector damping.");
+                Property("_customLinearDrag", "Custom Linear Drag", "Additional linear drag applied once per logical Rigidbody2D contact.");
+                Property("_customAngularDrag", "Custom Angular Drag", "Additional angular drag applied once per logical Rigidbody2D contact.");
+                if (GetFloat("_customLinearDrag", 0f) > 1f && GetFloat("_buoyancyLinearDamping", 0f) > 1f ||
+                    GetFloat("_customAngularDrag", 0f) > 1f && GetFloat("_buoyancyAngularDamping", 0f) > 1f)
+                {
+                    EditorGUILayout.HelpBox("Strong custom drag and strong effector damping may over-damp motion. Tune one source down if needed.", MessageType.Warning);
+                }
+
+                EditorGUILayout.LabelField("Surface Interaction", EditorStyles.boldLabel);
+                Property("_enableSurfaceInteraction", "Interaction Enabled", "Enable the thin surface-crossing trigger and logical enter/exit tracking.");
+                Property("_surfaceInteractionLayers", "Surface Interaction Layers", "Non-trigger collider layers eligible for surface crossings and contact ripples.");
+                Property("_surfaceTriggerInteractionLayers", "Trigger Interaction Layers", "Trigger collider layers eligible for surface crossings when trigger colliders are included.");
+                Property("_includeTriggerCollidersInSurfaceInteraction", "Include Trigger Colliders", "Allow eligible trigger colliders to produce one logical surface contact per Rigidbody2D.");
+            }
+
+            EndTopLevelSection();
+        }
+
+        private void DrawEventSection()
+        {
+            var open = BeginTopLevelSection("Event", "Event");
+            if (open)
+            {
+                DrawEventProperty("_onSurfaceEnter", "Surface Enter", "Fires once when a logical Rigidbody2D first crosses the thin surface trigger.");
+                DrawEventProperty("_onSurfaceExit", "Surface Exit", "Fires once when the last collider of a logical Rigidbody2D leaves the thin surface trigger.");
+                DrawEventProperty("_onSubmerged", "Submerged", "Fires once when a logical Rigidbody2D first enters the full buoyancy volume.");
+                DrawEventProperty("_onResurfaced", "Resurfaced", "Fires once when the last collider of a logical Rigidbody2D leaves the full buoyancy volume.");
+            }
+
+            EndTopLevelSection();
+        }
+
+        private void DrawActionSection()
+        {
+            var open = BeginTopLevelSection("Action", "Action");
+            if (open)
+            {
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent("Reset Ripple Simulation", "Clear the instance-owned runtime ripple state. Available in Play Mode."), Water25DInspectorStyles.SmallButton))
+                if (GUILayout.Button(new GUIContent("Assign Defaults", "Assign only missing package-owned defaults.")))
                 {
-                    ResetRippleSimulation();
+                    AssignPackageDefaults();
                 }
 
-                using (new EditorGUI.DisabledScope(!Application.isPlaying || controller == null || !enabled))
+                if (GUILayout.Button(new GUIContent("Repair Hierarchy", "Repair generated children and rebuild the transient preview.")))
+                {
+                    RepairHierarchy();
+                }
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(new GUIContent("Refresh Preview", "Reapply property blocks and refresh the edit-mode preview.")))
+                {
+                    RefreshPreview();
+                }
+
+                if (GUILayout.Button(new GUIContent("Rebuild Geometry", "Rebuild transient top/front preview meshes using current dimensions and quality density.")))
+                {
+                    RebuildGeometry();
+                }
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                using (new EditorGUI.DisabledScope(!Application.isPlaying))
+                {
+                    if (GUILayout.Button(new GUIContent("Reset Ripple Simulation", "Clear the instance-owned runtime ripple state. Available in Play Mode.")))
+                    {
+                        ResetRippleSimulation();
+                    }
+                }
+
+                using (new EditorGUI.DisabledScope(targets.Length != 1))
+                {
+                    if (GUILayout.Button(new GUIContent("Make Profiles Unique", "Duplicate assigned style and quality profiles and assign the copies to this controller.")))
+                    {
+                        MakeProfilesUnique();
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                using (new EditorGUI.DisabledScope(targets.Length != 1))
+                {
+                    var controller = target as Water25DController;
+                    if (GUILayout.Button(new GUIContent("Select Top Surface", "Select the generated TopSurface child.")))
+                    {
+                        Water25DInspectorUtility.SelectObject(controller != null ? controller.TopSurface : null);
+                    }
+
+                    if (GUILayout.Button(new GUIContent("Select Front Surface", "Select the generated FrontSurface child.")))
+                    {
+                        Water25DInspectorUtility.SelectObject(controller != null ? controller.FrontSurface : null);
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+
+                if (GUILayout.Button(new GUIContent("Open Setup Documentation", "Open the Water25D setup and authoring documentation.")))
+                {
+                    Water25DInspectorUtility.OpenDocumentation(SetupDocumentationPath);
+                }
+
+                var diagnosticsOpen = BeginNestedSection("Action.Diagnostics", "Diagnostics");
+                if (diagnosticsOpen)
+                {
+                    DrawDiagnostics(target as Water25DController);
+                }
+
+                var advancedOpen = BeginNestedSection("Action.Advanced", "Advanced");
+                if (advancedOpen)
+                {
+                    DrawAdvancedDetails(target as Water25DController);
+                }
+            }
+
+            EndTopLevelSection();
+        }
+
+        private void DrawDiagnostics(Water25DController controller)
+        {
+            DrawValidationResults();
+
+            EditorGUILayout.LabelField("Performance Estimates", EditorStyles.boldLabel);
+            var metrics = Water25DInspectorUtility.CalculateMetrics(controller);
+            Metric("Top Mesh Vertices", metrics.TopVertexCount.x * metrics.TopVertexCount.y);
+            Metric("Top Mesh Triangles", metrics.TopTriangleCount);
+            Metric("Front Mesh Vertices", metrics.FrontVertexCount);
+            Metric("Front Mesh Triangles", metrics.FrontTriangleCount);
+            Metric("Top Vertices Per Unit", metrics.TopVerticesPerUnit.ToString("0.##"));
+            Metric("Ripple Resolution", metrics.RippleResolution.x + " x " + metrics.RippleResolution.y);
+            Metric("Ripple State", Water25DInspectorUtility.FormatBytes(metrics.RippleStateBytes));
+            Metric("Ripple Format", metrics.UsesRgHalf ? "RGHalf" : "RGFloat fallback");
+            Metric("Mipmaps", "Disabled");
+            Metric("Simulation Updates / Second", metrics.SimulationFrequency.ToString("0.##"));
+            Metric("Propagation Substeps", metrics.PropagationSubsteps);
+            Metric("Propagated Cells / Second", metrics.PropagatedCellsPerSecond.ToString("N0"));
+            Metric("Maximum Impacts / Update", metrics.MaximumImpactsPerStep);
+            Metric("Queue Capacity", metrics.MaximumQueuedImpacts);
+
+            if (GetReflectionMode() == WaterReflectionMode.Planar)
+            {
+                EditorGUILayout.LabelField("Reflection Estimate", EditorStyles.boldLabel);
+                var scale = GetFloat("_reflectionResolutionScale", 0.25f);
+                var camera = GetReflectionCamera();
+                if (camera != null && camera.pixelWidth > 0 && camera.pixelHeight > 0)
+                {
+                    Metric("Resolution Scale", scale.ToString("0.##"));
+                    Metric("Estimated Texture", Mathf.Max(1, Mathf.RoundToInt(camera.pixelWidth * scale)) + " x " + Mathf.Max(1, Mathf.RoundToInt(camera.pixelHeight * scale)));
+                }
+                else
+                {
+                    Metric("Estimated Texture", "Camera dimensions unavailable");
+                }
+
+                var interval = GetInt("_reflectionUpdateIntervalFrames", 3);
+                Metric("Update Interval", interval + " frame(s)");
+                Metric("Estimated Maximum Frequency", (60f / Mathf.Max(1, interval)).ToString("0.##") + " Hz at 60 FPS");
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Validate", "Refresh validation findings without changing authored data."), Water25DInspectorStyles.SmallButton))
+            {
+                RefreshValidation();
+            }
+
+            using (new EditorGUI.DisabledScope(!HasSafeFixes()))
+            {
+                if (GUILayout.Button(new GUIContent("Fix All Safe Issues", "Apply package-owned, Undo-backed repairs without changing unrelated authored children."), Water25DInspectorStyles.SmallButton))
+                {
+                    FixAllSafeIssues();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (Application.isPlaying && controller != null)
+            {
+                using (new EditorGUI.DisabledScope(!GetBool("_enableRippleSimulation", true)))
                 {
                     if (GUILayout.Button(new GUIContent("Test Ripple at Center", "Queue a test impact at the centre of the water in Play Mode."), Water25DInspectorStyles.SmallButton))
                     {
                         CreateTestRipple(controller);
                     }
                 }
-
-                EditorGUILayout.EndHorizontal();
             }
-
-            EndSection(open);
         }
 
-        private void DrawReflectionSection(Water25DController controller)
+        private void DrawValidationResults()
         {
-            var open = BeginSection("Reflection", "Reflection", false);
-            if (open)
+            if (_validationResults == null)
             {
-                var modeProperty = serializedObject.FindProperty("_reflectionMode");
-                if (modeProperty != null)
-                {
-                    EditorGUILayout.PropertyField(modeProperty, new GUIContent("Reflection Mode", "Disabled, camera-free Stylized fallback, or shared adaptive Planar reflection."));
-                }
+                RefreshValidation();
+            }
 
-                var mode = modeProperty != null ? (WaterReflectionMode)modeProperty.enumValueIndex : WaterReflectionMode.Stylized;
-                if (mode == WaterReflectionMode.Disabled)
+            for (var i = 0; i < _validationResults.Count; i++)
+            {
+                var result = _validationResults[i];
+                if (result.Severity == Water25DValidationSeverity.Info)
                 {
-                    EditorGUILayout.HelpBox("Reflection rendering is disabled and no reflection camera or texture is created.", MessageType.Info);
-                }
-                else if (mode == WaterReflectionMode.Stylized)
-                {
-                    Property("_reflectionStrength", "Reflection Strength", "Strength of the current camera-free stylized reflection fallback.");
-                    EditorGUILayout.HelpBox("Stylized mode uses no reflection camera. Planar camera, mask, resolution and update controls are intentionally hidden.", MessageType.Info);
+                    EditorGUILayout.LabelField(result.Title, EditorStyles.boldLabel);
+                    EditorGUILayout.LabelField(result.Message, EditorStyles.wordWrappedMiniLabel);
                 }
                 else
                 {
-                    Property("_reflectionCameraSource", "Camera Source", "Camera used to define the shared planar reflection group. Assign explicitly for deterministic grouping.");
-                    Property("_reflectionCullingMask", "Planar Culling Mask", "Layers rendered by the shared reflection camera. Exclude water and reflection-helper layers when recursion is possible.");
-                    Property("_reflectionResolutionScale", "Resolution Scale", "Fraction of the source camera resolution used by the shared reflection texture.");
-                    Property("_reflectionUpdateIntervalFrames", "Update Interval", "Minimum frame interval between adaptive reflection renders unless the camera moves.");
-                    Property("_reflectionStrength", "Reflection Strength", "Blend strength applied to the planar reflection.");
-                    DrawReflectionEstimate(GetReflectionCamera());
-                    if (Application.isPlaying)
+                    var messageType = result.Severity == Water25DValidationSeverity.Error ? MessageType.Error : MessageType.Warning;
+                    EditorGUILayout.HelpBox(result.Title + "\n" + result.Message, messageType);
+                }
+
+                if (result.HasFix || result.TargetObject != null)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    if (result.HasFix)
                     {
-                        if (WaterReflectionManager.HasInstance)
+                        if (GUILayout.Button(new GUIContent(GetFixLabel(result.FixAction), "Apply this safe, non-destructive repair."), Water25DInspectorStyles.SmallButton))
                         {
-                            EditorGUILayout.LabelField("Registration", WaterReflectionManager.RegisteredSurfaceCount + " surface(s), " + WaterReflectionManager.ActiveGroupCount + " active group(s)");
-                        }
-                        else
-                        {
-                            EditorGUILayout.HelpBox("No WaterReflectionManager is present in Play Mode yet.", MessageType.Warning);
+                            ApplyFix(result.FixAction, result.TargetObject);
                         }
                     }
-                }
-            }
 
-            EndSection(open);
-        }
-
-        private void DrawFxSection()
-        {
-            var open = BeginSection("FX", "FX", false);
-            if (open)
-            {
-                var enabledProperty = serializedObject.FindProperty("_enableEffects");
-                if (enabledProperty != null)
-                {
-                    EditorGUILayout.PropertyField(enabledProperty, new GUIContent("Effects Enabled", "Enable pooled splash and bubble presentation effects for interaction events."));
-                }
-
-                var enabled = enabledProperty == null || enabledProperty.boolValue;
-                if (!enabled)
-                {
-                    EditorGUILayout.HelpBox("Pooled splash and bubble effects are disabled. Definition assignments are hidden until this feature is enabled.", MessageType.Info);
-                }
-                else
-                {
-                    DrawFxDefinitionRow("Splash Definition", "_splashDefinition", "Splash", "Definition used for surface enter and exit effects.");
-                    DrawFxDefinitionRow("Bubble Definition", "_bubbleDefinition", "Bubble", "Definition used for submerged effects.");
-                    Property("_maximumFxPoolSize", "Maximum Pool Size", "Upper bound for each fixed-capacity effect pool. Exhaustion rejects requests instead of instantiating during gameplay.");
-                    var splash = serializedObject.FindProperty("_splashDefinition");
-                    var bubble = serializedObject.FindProperty("_bubbleDefinition");
-                    if (splash != null && bubble != null && (splash.objectReferenceValue == null || bubble.objectReferenceValue == null))
+                    if (result.TargetObject != null && result.FixAction != Water25DFixAction.SelectObject)
                     {
-                        EditorGUILayout.HelpBox("FX definitions are optional. Missing assignments produce the lightweight package fallback effect and are reported as a warning by Validation.", MessageType.Warning);
+                        if (GUILayout.Button(new GUIContent("Select", "Select the object associated with this diagnostic."), Water25DInspectorStyles.SmallButton))
+                        {
+                            Water25DInspectorUtility.SelectObject(result.TargetObject);
+                        }
                     }
+                    EditorGUILayout.EndHorizontal();
                 }
             }
-
-            EndSection(open);
         }
 
-        private void DrawPhysicsSection()
+        private void DrawAdvancedDetails(Water25DController controller)
         {
-            var open = BeginSection("Physics", "Physics", false);
-            if (open)
-            {
-                EditorGUILayout.LabelField("Buoyancy", Water25DInspectorStyles.Subsection);
-                Property("_enableBuoyancy", "Enable Buoyancy", "Enable the full underwater trigger and its BuoyancyEffector2D.");
-                var buoyancyEnabled = GetBool("_enableBuoyancy", true);
-                if (buoyancyEnabled)
-                {
-                    Property("_buoyancyDensity", "Density", "Density used by the generated BuoyancyEffector2D.");
-                    Property("_buoyancyLayers", "Buoyancy Layers", "Rigidbody2D layers eligible for the full underwater volume.");
-                    Property("_buoyancyLinearDamping", "Effector Linear Damping", "Linear damping applied by BuoyancyEffector2D when custom drag is disabled or kept modest.");
-                    Property("_buoyancyAngularDamping", "Effector Angular Damping", "Angular damping applied by BuoyancyEffector2D when custom drag is disabled or kept modest.");
-                }
-
-                EditorGUILayout.LabelField("Drag", Water25DInspectorStyles.Subsection);
-                Property("_enableCustomDrag", "Enable Custom Drag", "Apply optional per-Rigidbody2D drag from WaterPhysicsVolume2D in addition to effector damping.");
-                if (GetBool("_enableCustomDrag", false))
-                {
-                    Property("_customLinearDrag", "Custom Linear Drag", "Additional linear drag applied once per logical Rigidbody2D contact.");
-                    Property("_customAngularDrag", "Custom Angular Drag", "Additional angular drag applied once per logical Rigidbody2D contact.");
-                    if (GetFloat("_customLinearDrag", 0f) > 1f && GetFloat("_buoyancyLinearDamping", 0f) > 1f || GetFloat("_customAngularDrag", 0f) > 1f && GetFloat("_buoyancyAngularDamping", 0f) > 1f)
-                    {
-                        EditorGUILayout.HelpBox("Strong custom drag and strong effector damping may over-damp motion. Tune one source down if needed.", MessageType.Warning);
-                    }
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Custom drag is disabled. BuoyancyEffector2D damping values provide the configured drag response.", MessageType.Info);
-                }
-
-                EditorGUILayout.HelpBox("Generated buoyancy collider and effector state are shown in Validation; their references are intentionally not editable fields here.", MessageType.Info);
-            }
-
-            EndSection(open);
+            EditorGUILayout.LabelField("Generated Hierarchy", EditorStyles.boldLabel);
+            DrawGeneratedReference("Top Surface", controller != null ? controller.TopSurface : null);
+            DrawGeneratedReference("Front Surface", controller != null ? controller.FrontSurface : null);
+            DrawGeneratedReference("Surface Crossing Trigger", controller != null ? controller.SurfaceCrossingTrigger : null);
+            DrawGeneratedReference("Buoyancy Volume", controller != null ? controller.BuoyancyVolume : null);
+            DrawGeneratedReference("Reflection Anchor", controller != null ? controller.ReflectionAnchor : null);
+            DrawGeneratedReference("FX Root", controller != null ? controller.FxRoot : null);
         }
 
-        private void DrawInteractionSection()
+        private bool BeginTopLevelSection(string key, string label)
         {
-            var open = BeginSection("Interaction", "Interaction", false);
-            if (open)
+            var stateKey = TopLevelFoldoutPrefix + key;
+            var open = Water25DInspectorState.GetFoldout(stateKey, false);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            // Keep the section as a help-box container with a compact button-like header
+            // inset into it, using only standard Unity editor APIs.
+            var row = EditorGUILayout.GetControlRect(GUILayout.MinWidth(0f));
+            var header = row;
+            header.yMin -= 3f;
+            header.yMax += 3f;
+            header.xMin -= 4f;
+            header.xMax += 4f;
+            EditorGUI.LabelField(header, GUIContent.none, GUI.skin.button);
+
+            var arrow = row;
+            arrow.x += 1.5f;
+            arrow.y -= 1f;
+            arrow.y += row.height * 0.23f;
+            arrow.width = 13f;
+            arrow.height = 13f;
+            var next = GUI.Toggle(arrow, open, GUIContent.none, EditorStyles.foldout);
+
+            var labelRect = row;
+            labelRect.x += 17f;
+            EditorGUI.LabelField(labelRect, label, EditorStyles.boldLabel);
+            if (Event.current.type == EventType.MouseDown && Event.current.button == 0 && labelRect.Contains(Event.current.mousePosition))
             {
-                Property("_enableSurfaceInteraction", "Surface Interaction", "Enable the thin surface-crossing trigger and logical enter/exit tracking.");
-                if (GetBool("_enableSurfaceInteraction", true))
-                {
-                    Property("_surfaceInteractionLayers", "Surface Interaction Layers", "Non-trigger collider layers eligible for surface crossings and contact ripples.");
-                    Property("_surfaceTriggerInteractionLayers", "Trigger Interaction Layers", "Trigger collider layers eligible for surface crossings when trigger colliders are included.");
-                    Property("_includeTriggerCollidersInSurfaceInteraction", "Include Trigger Colliders", "Allow eligible trigger colliders to produce one logical surface contact per Rigidbody2D.");
-                    EditorGUILayout.LabelField("Crossing Band", "Configured in Basic", Water25DInspectorStyles.MetricLabel);
-                    EditorGUILayout.LabelField("Interaction Lane", "Configured in Basic", Water25DInspectorStyles.MetricLabel);
-                    EditorGUILayout.HelpBox("Impact strength, full-speed threshold and multiplier are grouped in Contact Ripples so they are authored once.", MessageType.Info);
-                }
-                else
-                {
-                    EditorGUILayout.HelpBox("Surface interaction is disabled. The crossing trigger will not produce enter, exit, ripple or splash events.", MessageType.Info);
-                }
+                next = !next;
+                GUI.changed = true;
+                Event.current.Use();
             }
 
-            EndSection(open);
-        }
-
-        private void DrawEventsSection()
-        {
-            var open = BeginSection("Events", "Events", false);
-            if (open)
-            {
-                DrawEventProperty("_onSurfaceEnter", "Surface Entered", "Fires once when a logical Rigidbody2D first crosses the thin surface trigger.");
-                DrawEventProperty("_onSurfaceExit", "Surface Exited", "Fires once when the last collider of a logical Rigidbody2D leaves the thin surface trigger.");
-                DrawEventProperty("_onSubmerged", "Submerged", "Fires once when a logical Rigidbody2D first enters the full buoyancy volume.");
-                DrawEventProperty("_onResurfaced", "Resurfaced", "Fires once when the last collider of a logical Rigidbody2D leaves the full buoyancy volume.");
-                EditorGUILayout.HelpBox("The runtime also exposes C# events for systems that cannot be wired through the Inspector. Splash and ripple requests remain internal presentation actions rather than persistent UnityEvents.", MessageType.Info);
-            }
-
-            EndSection(open);
-        }
-
-        private void DrawPerformanceSection(Water25DController controller)
-        {
-            var open = BeginSection("Performance", "Performance", false);
-            if (open)
-            {
-                var metrics = Water25DInspectorUtility.CalculateMetrics(controller);
-                EditorGUILayout.LabelField("Geometry (calculated)", Water25DInspectorStyles.Subsection);
-                Metric("Top Mesh Vertices", metrics.TopVertexCount.x * metrics.TopVertexCount.y);
-                Metric("Top Mesh Triangles", metrics.TopTriangleCount);
-                Metric("Front Mesh Vertices", metrics.FrontVertexCount);
-                Metric("Front Mesh Triangles", metrics.FrontTriangleCount);
-                Metric("Top Vertices Per Unit", metrics.TopVerticesPerUnit.ToString("0.##"));
-
-                EditorGUILayout.LabelField("Ripple State (estimated)", Water25DInspectorStyles.Subsection);
-                Metric("Calculated Resolution", metrics.RippleResolution.x + " x " + metrics.RippleResolution.y);
-                Metric("One State Texture", Water25DInspectorUtility.FormatBytes(metrics.RippleStateBytes));
-                Metric("Expected Format", metrics.UsesRgHalf ? "RGHalf" : "RGFloat fallback");
-                Metric("Mipmaps", "Disabled");
-                Metric("Simulation Updates / Second", metrics.SimulationFrequency.ToString("0.##"));
-                Metric("Propagation Substeps", metrics.PropagationSubsteps);
-                Metric("Propagated Cells / Second", metrics.PropagatedCellsPerSecond.ToString("N0"));
-                Metric("Maximum Impact Injections / Update", metrics.MaximumImpactsPerStep);
-                Metric("Queue Capacity", metrics.MaximumQueuedImpacts);
-
-                if (Application.isPlaying && controller != null)
-                {
-                    EditorGUILayout.LabelField("Runtime", Water25DInspectorStyles.Subsection);
-                    Metric("Ripple Simulator", controller.RippleSimulationAvailable ? "Available" : "Unavailable");
-                    Metric("Ripple State", controller.IsRippleSimulationSuspended ? "Suspended" : "Active");
-                    Metric("Dropped Impacts", controller.DroppedRippleImpactCount);
-                    Metric("Top Renderer", IsRendererVisible(controller.TopSurface) ? "Visible" : "Not visible");
-                    Metric("Front Renderer", IsRendererVisible(controller.FrontSurface) ? "Visible" : "Not visible");
-                    Metric("Reflection Mode", controller.ReflectionMode.ToString());
-                }
-
-                var mode = GetReflectionMode();
-                if (mode == WaterReflectionMode.Planar)
-                {
-                    EditorGUILayout.LabelField("Reflection (estimated)", Water25DInspectorStyles.Subsection);
-                    var scale = GetFloat("_reflectionResolutionScale", 0.25f);
-                    var camera = GetReflectionCamera();
-                    if (camera != null && camera.pixelWidth > 0 && camera.pixelHeight > 0)
-                    {
-                        Metric("Resolution Scale", scale.ToString("0.##"));
-                        Metric("Estimated Texture", Mathf.Max(1, Mathf.RoundToInt(camera.pixelWidth * scale)) + " x " + Mathf.Max(1, Mathf.RoundToInt(camera.pixelHeight * scale)));
-                    }
-                    else
-                    {
-                        Metric("Estimated Texture", "Camera dimensions unavailable");
-                    }
-                    Metric("Update Interval", GetInt("_reflectionUpdateIntervalFrames", 3) + " frame(s)");
-                    Metric("Estimated Maximum Frequency", (60f / Mathf.Max(1, GetInt("_reflectionUpdateIntervalFrames", 3))).ToString("0.##") + " Hz at 60 FPS");
-                }
-
-                EditorGUILayout.HelpBox("All values in this dashboard are calculated estimates derived from authored settings. Use the Unity Profiler and Frame Debugger on target hardware before recording performance claims.", MessageType.Info);
-            }
-
-            EndSection(open);
-        }
-
-        private void DrawValidationSection(Water25DController controller)
-        {
-            var defaultOpen = HasSeverity(Water25DValidationSeverity.Error);
-            var open = BeginSection("Validation", "Validation", defaultOpen);
-            if (open)
-            {
-                if (targets.Length > 1)
-                {
-                    EditorGUILayout.HelpBox("Validation details are shown for the first selected controller. Serialized fields remain multi-object aware.", MessageType.Info);
-                }
-
-                DrawValidationGroup(Water25DValidationSeverity.Error, "Errors");
-                DrawValidationGroup(Water25DValidationSeverity.Warning, "Warnings");
-                DrawValidationGroup(Water25DValidationSeverity.Info, "Information");
-
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent("Validate", "Refresh validation findings without changing authored data."), Water25DInspectorStyles.SmallButton))
-                {
-                    RefreshValidation();
-                }
-
-                using (new EditorGUI.DisabledScope(!HasSafeFixes()))
-                {
-                    if (GUILayout.Button(new GUIContent("Fix All Safe Issues", "Assign missing package defaults and repair generated hierarchy. No destructive fixes are performed."), Water25DInspectorStyles.SmallButton))
-                    {
-                        FixAllSafeIssues();
-                    }
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-
-            EndSection(open);
-        }
-
-        private void DrawAdvancedSection(Water25DController controller)
-        {
-            var open = BeginSection("Advanced", "Advanced", false);
-            if (open)
-            {
-                Property("_synchronizeGeneratedChildLayers", "Synchronize Generated Child Layers", "Keep generated children on the controller's layer. Disable only when a deliberate layer layout is authored manually.");
-                EditorGUILayout.LabelField("Generated Hierarchy", Water25DInspectorStyles.Subsection);
-                DrawGeneratedReference("Top Surface", controller != null ? controller.TopSurface : null);
-                DrawGeneratedReference("Front Surface", controller != null ? controller.FrontSurface : null);
-                DrawGeneratedReference("Surface Crossing Trigger", controller != null ? controller.SurfaceCrossingTrigger : null);
-                DrawGeneratedReference("Buoyancy Volume", controller != null ? controller.BuoyancyVolume : null);
-                DrawGeneratedReference("Reflection Anchor", controller != null ? controller.ReflectionAnchor : null);
-                DrawGeneratedReference("FX Root", controller != null ? controller.FxRoot : null);
-
-                EditorGUILayout.LabelField("Runtime Resource Summary", Water25DInspectorStyles.Subsection);
-                EditorGUILayout.HelpBox("Meshes, property blocks, ripple textures, runtime ripple materials, reflection resources and pooled FX belong to the water instance or shared reflection group. Persistent template assets are not mutated at runtime.", MessageType.Info);
-                Metric("Top Shader", Water25DInspectorUtility.TopShaderName);
-                Metric("Front Shader", Water25DInspectorUtility.FrontShaderName);
-                Metric("Ripple Shader", Water25DInspectorUtility.RippleShaderName);
-
-                EditorGUILayout.Space(2f);
-                EditorGUILayout.LabelField("Authoring Actions", Water25DInspectorStyles.Subsection);
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent("Assign Package Defaults", "Assign only missing package-owned materials and profiles."), Water25DInspectorStyles.SmallButton))
-                {
-                    AssignPackageDefaults();
-                }
-                if (GUILayout.Button(new GUIContent("Make Profiles Unique", "Duplicate assigned style and quality profiles and assign them to this controller."), Water25DInspectorStyles.SmallButton))
-                {
-                    MakeProfilesUnique();
-                }
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent("Repair Hierarchy", "Repair generated children without deleting unrelated authored children."), Water25DInspectorStyles.SmallButton))
-                {
-                    RepairHierarchy();
-                }
-                if (GUILayout.Button(new GUIContent("Rebuild Geometry", "Rebuild transient top/front preview meshes using current dimensions and quality density."), Water25DInspectorStyles.SmallButton))
-                {
-                    RebuildGeometry();
-                }
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button(new GUIContent("Reset Ripple", "Clear runtime ripple state in Play Mode."), Water25DInspectorStyles.SmallButton))
-                {
-                    ResetRippleSimulation();
-                }
-                if (GUILayout.Button(new GUIContent("Open Setup", "Open package setup documentation."), Water25DInspectorStyles.SmallButton))
-                {
-                    Water25DInspectorUtility.OpenDocumentation(SetupDocumentationPath);
-                }
-                EditorGUILayout.EndHorizontal();
-            }
-
-            EndSection(open);
-        }
-
-        private bool BeginSection(string key, string label, bool defaultOpen)
-        {
-            var open = Water25DInspectorState.GetFoldout(key, defaultOpen);
-            var next = EditorGUILayout.BeginFoldoutHeaderGroup(open, label);
-            if (next != open)
-            {
-                Water25DInspectorState.SetFoldout(key, next);
-            }
-
-            if (next)
-            {
-                EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);
-            }
-
-            return next;
-        }
-
-        private static void EndSection(bool open)
-        {
-            if (open)
-            {
-                EditorGUILayout.EndVertical();
-            }
-
-            EditorGUILayout.EndFoldoutHeaderGroup();
-        }
-
-        private void DrawNestedQualitySection(SerializedObject profile, string label, string stateKey, bool defaultOpen, System.Func<SerializedObject, bool> draw)
-        {
-            var open = Water25DInspectorState.GetFoldout(stateKey, defaultOpen);
-            var next = EditorGUILayout.Foldout(open, label, true, Water25DInspectorStyles.Foldout);
             if (next != open)
             {
                 Water25DInspectorState.SetFoldout(stateKey, next);
@@ -661,9 +558,36 @@ namespace Water25D.Editor
 
             if (next)
             {
-                EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);
+                EditorGUILayout.Space(2f);
+            }
+
+            return next;
+        }
+
+        private void EndTopLevelSection()
+        {
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.Space(2f);
+        }
+
+        private bool BeginNestedSection(string key, string label)
+        {
+            var stateKey = "Controller.Nested." + key;
+            var open = Water25DInspectorState.GetFoldout(stateKey, false);
+            var next = EditorGUILayout.Foldout(open, label, true);
+            if (next != open)
+            {
+                Water25DInspectorState.SetFoldout(stateKey, next);
+            }
+
+            return next;
+        }
+
+        private void DrawNestedQualitySection(SerializedObject profile, string label, string stateKey, Func<SerializedObject, bool> draw)
+        {
+            if (BeginNestedSection(stateKey, label) && profile != null)
+            {
                 draw(profile);
-                EditorGUILayout.EndVertical();
             }
         }
 
@@ -673,6 +597,11 @@ namespace Water25D.Editor
             var isDefault = style
                 ? Water25DInspectorUtility.IsPackageDefaultStyle(profile as WaterStyleProfile)
                 : Water25DInspectorUtility.IsPackageDefaultQuality(profile as WaterQualityProfile);
+            if (!isDefault && users <= 1)
+            {
+                return;
+            }
+
             var message = isDefault
                 ? "This is a package default asset. Changes affect every Water25D object using it; use Make Unique Copy before creating a one-off customization."
                 : "Changes to this profile affect every Water25D object using it (" + users + " loaded user(s)).";
@@ -731,9 +660,15 @@ namespace Water25D.Editor
 
             if (GUILayout.Button(new GUIContent("Package Default", "Assign the package default without modifying that asset."), Water25DInspectorStyles.SmallButton))
             {
-                UnityEngine.Object defaultProfile = style
-                    ? Water25DInspectorUtility.LoadPackageAsset<WaterStyleProfile>(Water25DInspectorUtility.StyleProfilePath)
-                    : Water25DInspectorUtility.LoadPackageAsset<WaterQualityProfile>(Water25DInspectorUtility.QualityProfilePath);
+                UnityEngine.Object defaultProfile;
+                if (style)
+                {
+                    defaultProfile = Water25DInspectorUtility.LoadPackageAsset<WaterStyleProfile>(Water25DInspectorUtility.StyleProfilePath);
+                }
+                else
+                {
+                    defaultProfile = Water25DInspectorUtility.LoadPackageAsset<WaterQualityProfile>(Water25DInspectorUtility.QualityProfilePath);
+                }
                 Water25DInspectorUtility.AssignObjectReference(serializedObject, profileProperty.propertyPath, defaultProfile, "Assign Water25D Package Default");
                 RefreshProfileSerializedObjects();
             }
@@ -766,7 +701,7 @@ namespace Water25D.Editor
             }
         }
 
-        private void DrawMaterialRow(string label, string propertyPath, string expectedShader, string packagePath, Material profileFallback)
+        private void DrawMaterialRow(string label, string propertyPath, string packagePath, Material profileFallback)
         {
             var property = serializedObject.FindProperty(propertyPath);
             if (property == null)
@@ -786,11 +721,7 @@ namespace Water25D.Editor
                 resolved = renderer != null ? renderer.sharedMaterial : null;
             }
 
-            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(property, new GUIContent(label, "Persistent material template. Runtime property blocks carry per-water values without mutating this asset."));
-            DrawStatusBadge(Water25DInspectorUtility.GetMaterialStatus(resolved, expectedShader));
-            EditorGUILayout.EndHorizontal();
-
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(EditorGUIUtility.labelWidth);
             using (new EditorGUI.DisabledScope(resolved == null))
@@ -858,38 +789,6 @@ namespace Water25D.Editor
             EditorGUI.showMixedValue = previousMixed;
         }
 
-        private void DrawRippleRuntimeStatus(Water25DController controller, bool enabled)
-        {
-            EditorGUILayout.LabelField("Runtime Status", Water25DInspectorStyles.Subsection);
-            if (!Application.isPlaying || controller == null)
-            {
-                EditorGUILayout.HelpBox("Runtime-only simulator status appears in Play Mode.", MessageType.Info);
-                return;
-            }
-
-            Metric("Simulator", enabled && controller.RippleSimulationAvailable ? "Available" : "Unavailable");
-            Metric("State", controller.IsRippleSimulationSuspended ? "Suspended" : "Active");
-            if (Water25DInspectorUtility.TryGetTextureDimensions(controller.RippleTexture, out var dimensions))
-            {
-                Metric("Texture", dimensions.x + " x " + dimensions.y);
-            }
-            Metric("Dropped Impacts", controller.DroppedRippleImpactCount);
-        }
-
-        private void DrawReflectionEstimate(Camera camera)
-        {
-            if (camera == null || camera.pixelWidth <= 0 || camera.pixelHeight <= 0)
-            {
-                EditorGUILayout.LabelField("Estimated Texture", "Camera dimensions unavailable", Water25DInspectorStyles.MetricLabel);
-                return;
-            }
-
-            var scale = GetFloat("_reflectionResolutionScale", 0.25f);
-            var width = Mathf.Max(1, Mathf.RoundToInt(camera.pixelWidth * scale));
-            var height = Mathf.Max(1, Mathf.RoundToInt(camera.pixelHeight * scale));
-            EditorGUILayout.LabelField("Estimated Texture", width + " x " + height, Water25DInspectorStyles.MetricLabel);
-        }
-
         private void DrawFxDefinitionRow(string label, string propertyPath, string suffix, string tooltip)
         {
             var property = serializedObject.FindProperty(propertyPath);
@@ -911,13 +810,10 @@ namespace Water25D.Editor
         private void DrawEventProperty(string propertyPath, string label, string explanation)
         {
             var property = serializedObject.FindProperty(propertyPath);
-            if (property == null)
+            if (property != null)
             {
-                return;
+                EditorGUILayout.PropertyField(property, new GUIContent(label, explanation), true);
             }
-
-            EditorGUILayout.PropertyField(property, new GUIContent(label, explanation), true);
-            EditorGUILayout.LabelField(explanation, EditorStyles.miniLabel);
         }
 
         private void DrawGeneratedReference(string label, Transform reference)
@@ -927,6 +823,7 @@ namespace Water25D.Editor
             {
                 EditorGUILayout.ObjectField(label, reference, typeof(Transform), true);
             }
+
             using (new EditorGUI.DisabledScope(reference == null))
             {
                 if (GUILayout.Button(new GUIContent("Select", "Select the generated child without exposing it as an editable field."), Water25DInspectorStyles.SmallButton))
@@ -937,110 +834,11 @@ namespace Water25D.Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawValidationGroup(Water25DValidationSeverity severity, string label)
-        {
-            var count = CountSeverity(severity);
-            if (count == 0)
-            {
-                return;
-            }
-
-            EditorGUILayout.LabelField(label + " (" + count + ")", Water25DInspectorStyles.Subsection);
-            for (var i = 0; i < _validationResults.Count; i++)
-            {
-                var result = _validationResults[i];
-                if (result.Severity != severity)
-                {
-                    continue;
-                }
-
-                EditorGUILayout.BeginVertical(Water25DInspectorStyles.StatusRow);
-                EditorGUILayout.BeginHorizontal();
-                DrawValidationBadge(result.Severity);
-                EditorGUILayout.LabelField(result.Title, EditorStyles.boldLabel);
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.LabelField(result.Message, EditorStyles.wordWrappedMiniLabel);
-                EditorGUILayout.BeginHorizontal();
-                if (result.HasFix)
-                {
-                    if (GUILayout.Button(new GUIContent(GetFixLabel(result.FixAction), "Apply this safe, non-destructive repair."), Water25DInspectorStyles.SmallButton))
-                    {
-                        ApplyFix(result.FixAction, result.TargetObject);
-                    }
-                }
-
-                if (result.TargetObject != null && result.FixAction != Water25DFixAction.SelectObject)
-                {
-                    if (GUILayout.Button(new GUIContent("Select", "Select the object associated with this validation result."), Water25DInspectorStyles.SmallButton))
-                    {
-                        Water25DInspectorUtility.SelectObject(result.TargetObject);
-                    }
-                }
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.EndVertical();
-            }
-        }
-
-        private void DrawAssetStatus(string label, SerializedProperty property)
-        {
-            var value = property != null ? property.objectReferenceValue : null;
-            var previous = GUI.color;
-            GUI.color = value != null ? Water25DInspectorStyles.ValidColor : Water25DInspectorStyles.ErrorColor;
-            EditorGUILayout.LabelField(label + ": " + (value != null ? "Assigned" : "Missing"), EditorStyles.miniBoldLabel);
-            GUI.color = previous;
-        }
-
-        private void DrawValidationBadge(Water25DValidationSeverity severity)
-        {
-            var previous = GUI.color;
-            GUI.color = GetSeverityColor(severity);
-            var label = severity == Water25DValidationSeverity.Error ? "Errors" : severity == Water25DValidationSeverity.Warning ? "Warnings" : "Valid";
-            GUILayout.Label(label, EditorStyles.miniBoldLabel, GUILayout.Width(68f));
-            GUI.color = previous;
-        }
-
-        private void DrawValidationBadge(Water25DMaterialStatus status)
-        {
-            var previous = GUI.color;
-            GUI.color = Water25DInspectorUtility.GetMaterialStatusColor(status);
-            GUILayout.Label(Water25DInspectorUtility.GetMaterialStatusText(status), EditorStyles.miniBoldLabel, GUILayout.Width(92f));
-            GUI.color = previous;
-        }
-
-        private static Color GetSeverityColor(Water25DValidationSeverity severity)
-        {
-            switch (severity)
-            {
-                case Water25DValidationSeverity.Error:
-                    return Water25DInspectorStyles.ErrorColor;
-                case Water25DValidationSeverity.Warning:
-                    return Water25DInspectorStyles.WarningColor;
-                default:
-                    return Water25DInspectorStyles.ValidColor;
-            }
-        }
-
-        private void DrawStatusBadge(Water25DValidationSeverity severity)
-        {
-            var previous = GUI.color;
-            GUI.color = GetSeverityColor(severity);
-            GUILayout.Label(severity == Water25DValidationSeverity.Error ? "ERROR" : severity == Water25DValidationSeverity.Warning ? "WARNINGS" : "VALID", EditorStyles.boldLabel);
-            GUI.color = previous;
-        }
-
-        private void DrawStatusBadge(Water25DMaterialStatus status)
-        {
-            var previous = GUI.color;
-            GUI.color = Water25DInspectorUtility.GetMaterialStatusColor(status);
-            GUILayout.Label(Water25DInspectorUtility.GetMaterialStatusText(status), EditorStyles.miniBoldLabel);
-            GUI.color = previous;
-        }
-
         private void Metric(string label, object value)
         {
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(label, GUILayout.MinWidth(150f));
-            EditorGUILayout.LabelField(value != null ? value.ToString() : "—", Water25DInspectorStyles.MetricLabel);
+            EditorGUILayout.LabelField(label);
+            EditorGUILayout.LabelField(value != null ? value.ToString() : "—", GUILayout.MinWidth(100f));
             EditorGUILayout.EndHorizontal();
         }
 
@@ -1095,12 +893,6 @@ namespace Water25D.Editor
             return property != null ? property.objectReferenceValue as WaterQualityProfile : null;
         }
 
-        private static bool IsRendererVisible(Transform surface)
-        {
-            var renderer = surface != null ? surface.GetComponent<MeshRenderer>() : null;
-            return renderer != null && renderer.isVisible;
-        }
-
         private void RefreshProfileSerializedObjects()
         {
             if (serializedObject == null)
@@ -1129,45 +921,10 @@ namespace Water25D.Editor
         private void RefreshValidation()
         {
             var controller = target as Water25DController;
-            _validationResults = controller != null ? Water25DValidation.Validate(controller) : new List<Water25DValidationResult>();
+            _validationResults = controller != null
+                ? Water25DValidation.Validate(controller)
+                : new List<Water25DValidationResult>();
             Repaint();
-        }
-
-        private Water25DValidationSeverity GetAggregateSeverity()
-        {
-            if (HasSeverity(Water25DValidationSeverity.Error))
-            {
-                return Water25DValidationSeverity.Error;
-            }
-
-            return HasSeverity(Water25DValidationSeverity.Warning) ? Water25DValidationSeverity.Warning : Water25DValidationSeverity.Info;
-        }
-
-        private bool HasSeverity(Water25DValidationSeverity severity)
-        {
-            for (var i = 0; i < _validationResults.Count; i++)
-            {
-                if (_validationResults[i].Severity == severity)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private int CountSeverity(Water25DValidationSeverity severity)
-        {
-            var count = 0;
-            for (var i = 0; i < _validationResults.Count; i++)
-            {
-                if (_validationResults[i].Severity == severity)
-                {
-                    count++;
-                }
-            }
-
-            return count;
         }
 
         private bool HasSafeFixes()
@@ -1300,6 +1057,7 @@ namespace Water25D.Editor
             {
                 Water25DInspectorUtility.RebuildGeometry(targets[i] as Water25DController);
             }
+            RefreshValidation();
         }
 
         private void MakeProfilesUnique()
@@ -1428,6 +1186,7 @@ namespace Water25D.Editor
             Undo.RecordObject(controller, undoName);
             controller.SetDimensions(value, controller.FrontSurfaceDepth);
             Water25DInspectorUtility.MarkControllerAuthoringChange(controller);
+            RefreshValidation();
             SceneView.RepaintAll();
         }
 
@@ -1459,6 +1218,7 @@ namespace Water25D.Editor
                 controller.SetDimensions(controller.TopSurfaceSize, value);
             }
             Water25DInspectorUtility.MarkControllerAuthoringChange(controller);
+            RefreshValidation();
             SceneView.RepaintAll();
         }
     }

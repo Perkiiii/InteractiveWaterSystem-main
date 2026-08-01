@@ -7,17 +7,11 @@ The Water25D controller uses a standard Unity Inspector workflow with persistent
 Select a `Water25DController` to work through the package in this order:
 
 - **Basic** — width, visual depth, physical depth, waterline, interaction lane, crossing-band thickness, and scene-handle visibility. The help text calls out the local XZ top surface, local XY front surface, and flat 2D gameplay surface.
-- **Rendering** — shared style profile, inline surface colors, package-owned material templates, sorting layers/orders, and safe profile/material actions.
-- **Ambient Waves** — shared analytical-wave settings and the quality profile's ambient band controls. The direction helper normalizes the direction before storing it.
-- **Contact Ripples** — ripple enablement, impact settings, shared quality profile, visual amplitude, and runtime-only simulator status. Reset and center-test controls are guarded outside Play Mode.
-- **Reflection** — disabled, stylized, or planar mode. Camera and quality inputs are shown only when relevant; compatible-plane group diagnostics are read-only.
-- **FX** — project-owned splash/bubble definitions, pool capacity, and fallback warnings. Missing optional definitions are recoverable warnings, not automatic asset imports.
-- **Physics** — buoyancy, drag, and the separate surface-crossing/buoyancy-volume arrangement.
-- **Interaction** — layer masks, trigger participation, and read-only links to the generated volumes.
-- **Events** — UnityEvent entry/exit/submerge/resurface hooks with short behavior notes.
-- **Performance** — calculated mesh/ripple memory and scheduling estimates. These values are derived from the current dimensions and quality profile; they are not profiler measurements.
-- **Validation** — grouped errors, warnings, and information results. Safe fixes use Undo and can repair the generated hierarchy, assign package defaults, or rebuild preview geometry.
-- **Advanced** — generated hierarchy references, ownership summaries, refresh/rebuild actions, and explicit runtime resource controls.
+- **Rendering** — shared style and quality profile fields, inline appearance controls, package-owned material templates, sorting layers/orders, and nested Ambient Waves, Contact Ripples, and Reflection controls.
+- **FX** — pooled splash and bubble definitions and pool capacity.
+- **Physics** — buoyancy, drag, surface interaction, collider masks, trigger participation, and the separate surface-crossing/buoyancy-volume arrangement.
+- **Event** — UnityEvent surface-enter, surface-exit, submerged, and resurfaced hooks.
+- **Action** — regular authoring buttons for defaults, hierarchy repair, preview refresh, geometry rebuild, ripple reset, generated-surface selection, and setup documentation. Diagnostics and Advanced are compact nested foldouts here.
 
 ## Profile workflow
 
@@ -33,8 +27,8 @@ With **Show Scene Handles** enabled, select the water root in the Scene view. Co
 
 ## Validation and performance
 
-Run **Validate** after changing hierarchy, profiles, materials, masks, reflection, or ripple quality. **Fix All Safe Issues** only applies package-owned, reversible fixes. Missing optional FX definitions remain a warning until project-owned definitions are assigned.
+Open **Action > Diagnostics** and run **Validate** after changing hierarchy, profiles, materials, masks, reflection, or ripple quality. **Fix All Safe Issues** only applies package-owned, reversible fixes. Performance values are calculated estimates, not profiler measurements.
 
-Use the Performance section to review estimated vertex counts, ripple resolution, state memory, and cell-update scheduling. Use the Unity Profiler and Frame Debugger before recording measured claims about allocations, render-texture recreation, draw counts, or reflection cost.
+Use the estimates in **Action > Diagnostics** to review vertex counts, ripple resolution, state memory, cell-update scheduling, and planar reflection size. Use the Unity Profiler and Frame Debugger before recording measured claims about allocations, render-texture recreation, draw counts, or reflection cost.
 
 The current authoring surface intentionally exposes only implemented package behavior. Distortion, blur, caustics, light shafts, and a compute ripple backend are not presented as available features in this slice.

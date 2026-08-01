@@ -88,35 +88,6 @@ namespace Water25D.Editor
                 : Water25DMaterialStatus.Unexpected;
         }
 
-        public static string GetMaterialStatusText(Water25DMaterialStatus status)
-        {
-            switch (status)
-            {
-                case Water25DMaterialStatus.Valid:
-                    return "Valid";
-                case Water25DMaterialStatus.Unsupported:
-                    return "Unsupported";
-                case Water25DMaterialStatus.Unexpected:
-                    return "Unexpected shader";
-                default:
-                    return "Missing";
-            }
-        }
-
-        public static Color GetMaterialStatusColor(Water25DMaterialStatus status)
-        {
-            switch (status)
-            {
-                case Water25DMaterialStatus.Valid:
-                    return Water25DInspectorStyles.ValidColor;
-                case Water25DMaterialStatus.Unsupported:
-                case Water25DMaterialStatus.Unexpected:
-                    return Water25DInspectorStyles.WarningColor;
-                default:
-                    return Water25DInspectorStyles.ErrorColor;
-            }
-        }
-
         public static bool AssignObjectReference(
             SerializedObject serializedObject,
             string propertyPath,
