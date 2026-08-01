@@ -51,6 +51,14 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawSurfaceRingFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Surface Ring Capacity", delegate
+            {
+                Property(serializedObject, "_maximumSurfaceRings", "Maximum Active Rings", "Fixed active-ring capacity for FlatStylized. Values are clamped to 1–16 and do not recreate CRT state.");
+            });
+        }
+
         public static bool DrawAmbientBandField(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water25D Ambient Wave Bands", delegate
@@ -109,6 +117,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Simulation Scheduling", true, DrawSchedulingFields);
             DrawStandaloneSection(serializedObject, "Wave Behaviour", false, DrawWaveBehaviourFields);
             DrawStandaloneSection(serializedObject, "Geometry", false, DrawGeometryFields);
+            DrawStandaloneSection(serializedObject, "Surface Rings", false, DrawSurfaceRingFields);
             DrawValidation(serializedObject, profile);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

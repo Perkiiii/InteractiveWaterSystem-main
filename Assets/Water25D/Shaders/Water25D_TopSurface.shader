@@ -8,6 +8,8 @@ Shader "Water25D/Top Surface"
         _RippleEnabled("Ripple Enabled", Float) = 0
         _RippleAmplitude("Ripple Amplitude", Float) = 0.18
         _SurfaceMode("Surface Mode", Float) = 0
+        _WaterSize("Water Size", Vector) = (20, 6.5, 0, 0)
+        _WaterRingCount("Surface Ring Count", Float) = 0
         _WaveAmplitude("Ambient Wave Amplitude", Float) = 0.06
         _WaveLength("Ambient Wave Length", Float) = 3.5
         _WaveSpeed("Ambient Wave Speed", Float) = 0.8
@@ -42,12 +44,18 @@ Shader "Water25D/Top Surface"
         TEXTURE2D(_ReflectionTexture);
         SAMPLER(sampler_ReflectionTexture);
 
+        #define WATER_MAX_RINGS 16
+
         CBUFFER_START(UnityPerMaterial)
             half4 _BaseColor;
             half4 _FoamColor;
             float _RippleEnabled;
             float _RippleAmplitude;
             float _SurfaceMode;
+            float4 _WaterSize;
+            float _WaterRingCount;
+            float4 _WaterRingsA[WATER_MAX_RINGS];
+            float4 _WaterRingsB[WATER_MAX_RINGS];
             float _WaveAmplitude;
             float _WaveLength;
             float _WaveSpeed;
@@ -126,6 +134,34 @@ Shader "Water25D/Top Surface"
                 reflectionUV.y = 1.0 - reflectionUV.y;
                 half4 reflection = SAMPLE_TEXTURE2D(_ReflectionTexture, sampler_ReflectionTexture, reflectionUV);
                 color.rgb = lerp(color.rgb, reflection.rgb, saturate(_ReflectionStrength) * reflection.a);
+            }
+
+            if (_SurfaceMode > 0.5 && _WaterRingCount > 0.5)
+            {
+                float2 localXZ = input.uv * _WaterSize.xy;
+                int ringCount = min((int)_WaterRingCount, WATER_MAX_RINGS);
+                half ringHighlight = 0.0;
+                for (int ringIndex = 0; ringIndex < WATER_MAX_RINGS; ringIndex++)
+                {
+                    if (ringIndex >= ringCount)
+                    {
+                        break;
+                    }
+
+                    float4 ringA = _WaterRingsA[ringIndex];
+                    float4 ringB = _WaterRingsB[ringIndex];
+                    float age01 = saturate(ringA.z);
+                    float radius = lerp(ringB.x, ringB.y, age01);
+                    float distanceFromRing = abs(distance(localXZ, ringA.xy) - radius);
+                    float thickness = max(0.0001, ringB.z);
+                    float softness = max(0.0001, ringB.w);
+                    float annulus = 1.0 - smoothstep(thickness, thickness + softness, distanceFromRing);
+                    float fade = (1.0 - age01) * saturate(ringA.w);
+                    ringHighlight = saturate(ringHighlight + annulus * fade);
+                }
+
+                color.rgb = lerp(color.rgb, _FoamColor.rgb, ringHighlight * 0.55);
+                color.a = saturate(color.a + ringHighlight * 0.12);
             }
             return color;
         }

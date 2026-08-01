@@ -87,7 +87,7 @@ namespace Water25D
 
             if (_water != null)
             {
-                _water.CreateContactRippleAt(
+                _water.CreateSurfaceImpactAt(
                     _water.GetInteractionWorldPosition(eventData.Position),
                     strength,
                     velocity.y >= 0f,
@@ -136,7 +136,7 @@ namespace Water25D
                     velocity,
                     strength,
                     WaterInteractionEventType.SurfaceExit);
-                _water.CreateContactRippleAt(
+                _water.CreateSurfaceImpactAt(
                     _water.GetInteractionWorldPosition(eventData.Position),
                     strength,
                     velocity.y >= 0f,

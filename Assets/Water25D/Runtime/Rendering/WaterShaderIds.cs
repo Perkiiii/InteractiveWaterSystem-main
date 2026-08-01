@@ -22,6 +22,9 @@ namespace Water25D
         public static readonly int SurfaceMode = Shader.PropertyToID("_SurfaceMode");
         public static readonly int RippleScale = Shader.PropertyToID("_RippleScale");
         public static readonly int RippleHeightOffset = Shader.PropertyToID("_RippleHeightOffset");
+        public static readonly int SurfaceRingCount = Shader.PropertyToID("_WaterRingCount");
+        public static readonly int SurfaceRingsA = Shader.PropertyToID("_WaterRingsA");
+        public static readonly int SurfaceRingsB = Shader.PropertyToID("_WaterRingsB");
         public static readonly int WaveAmplitude = Shader.PropertyToID("_WaveAmplitude");
         public static readonly int WaveLength = Shader.PropertyToID("_WaveLength");
         public static readonly int WaveSpeed = Shader.PropertyToID("_WaveSpeed");

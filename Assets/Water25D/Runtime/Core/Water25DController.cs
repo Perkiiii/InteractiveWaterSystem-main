@@ -102,6 +102,7 @@ namespace Water25D
         [NonSerialized] private WaterHierarchyModule _hierarchy;
         [NonSerialized] private WaterGeometryModule _geometry;
         [NonSerialized] private WaterRenderingModule _rendering;
+        [NonSerialized] private WaterSurfacePresentationModule _surfacePresentation;
         [NonSerialized] private WaterPhysicsModule _physics;
         [NonSerialized] private WaterRippleModule _ripple;
         [NonSerialized] private WaterReflectionModule _reflection;
@@ -109,6 +110,9 @@ namespace Water25D
         [NonSerialized] private bool _hasLoggedMissingSurfaceShader;
         [NonSerialized] private bool _effectsConfigurationPending;
         [NonSerialized] private bool _reflectionConfigurationPending;
+        [NonSerialized] private bool _hasPresentationLayout;
+        [NonSerialized] private Vector2 _presentationTopSurfaceSize;
+        [NonSerialized] private WaterSurfaceMode _presentationSurfaceMode;
 
         public event Action<WaterInteractionEvent> SurfaceEntered;
         public event Action<WaterInteractionEvent> SurfaceExited;
@@ -135,6 +139,8 @@ namespace Water25D
         public bool RippleSimulationAvailable => _ripple != null && _ripple.IsAvailable;
         public bool IsRippleSimulationSuspended => _ripple != null && _ripple.IsSuspended;
         public int DroppedRippleImpactCount => _ripple != null ? _ripple.DroppedImpactCount : 0;
+        public int ActiveSurfaceRingCount => _surfacePresentation != null ? _surfacePresentation.ActiveRingCount : 0;
+        public int ReplacedSurfaceRingCount => _surfacePresentation != null ? _surfacePresentation.ReplacedRingCount : 0;
 
         private void OnEnable()
         {
@@ -172,6 +178,10 @@ namespace Water25D
             if (_surfaceMode == WaterSurfaceMode.SimulatedRipples && _enableRippleSimulation)
             {
                 _ripple.Tick(_surfaceMode, Time.deltaTime, isVisible);
+            }
+            else if (Application.isPlaying && _surfaceMode == WaterSurfaceMode.FlatStylized && _surfacePresentation.Tick(Time.deltaTime))
+            {
+                UploadSurfacePresentation();
             }
         }
 
@@ -282,48 +292,104 @@ namespace Water25D
         }
 
         /// <summary>
-        /// Queues a world-space impact. The point is rejected when it lies outside the XZ top surface.
+        /// Creates a mode-appropriate world-space surface impact. SimulatedRipples queues the
+        /// existing CRT impact while FlatStylized creates a fixed-capacity presentation ring.
         /// </summary>
-        public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp = true)
+        public bool CreateSurfaceImpactAt(Vector3 worldPosition, float strength, bool initialUp = true, float radius = -1f)
         {
-            var settings = GetQualitySettings();
-            return CreateContactRippleAt(worldPosition, initialStrength, initialUp, settings.ImpactRadius);
-        }
-
-        public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp, float radius)
-        {
-            if (!_enableRippleSimulation || !Application.isPlaying || _surfaceMode != WaterSurfaceMode.SimulatedRipples)
-            {
-                return false;
-            }
-
-            if (!TryGetSurfaceUV(worldPosition, out var uv))
+            if (!Application.isPlaying)
             {
                 return false;
             }
 
             EnsureModules();
+            var qualitySettings = GetQualitySettings();
+            var styleSettings = _styleProfile != null ? _styleProfile.GetSettings() : WaterStyleSettings.Default;
+            _surfacePresentation.Configure(qualitySettings, styleSettings);
+
+            if (_surfaceMode == WaterSurfaceMode.FlatStylized)
+            {
+                if (!TryGetSurfaceLocalXZ(worldPosition, out var localXZ))
+                {
+                    return false;
+                }
+
+                var ringRadius = radius;
+                if (!IsFinite(ringRadius) || ringRadius <= 0f)
+                {
+                    ringRadius = qualitySettings.ImpactRadius;
+                }
+
+                if (!_surfacePresentation.AddRing(localXZ, strength, ringRadius, initialUp))
+                {
+                    return false;
+                }
+
+                UploadSurfacePresentation();
+                return true;
+            }
+
+            if (!_enableRippleSimulation || !TryGetSurfaceUV(worldPosition, out var uv))
+            {
+                return false;
+            }
+
             if (!_ripple.IsAvailable)
             {
                 return false;
             }
 
-            _ripple.EnqueueImpact(new WaterRippleImpact(uv, initialStrength, radius, initialUp));
+            // Preserve the simulated path's established radius and direction semantics.
+            _ripple.EnqueueImpact(new WaterRippleImpact(uv, strength, radius, initialUp));
             return true;
+        }
+
+        public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp = true)
+        {
+            return CreateSurfaceImpactAt(
+                worldPosition,
+                initialStrength,
+                initialUp,
+                GetQualitySettings().ImpactRadius);
+        }
+
+        public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp, float radius)
+        {
+            return CreateSurfaceImpactAt(worldPosition, initialStrength, initialUp, radius);
         }
 
         public bool TryGetSurfaceUV(Vector3 worldPosition, out Vector2 uv)
         {
-            var localPosition = transform.InverseTransformPoint(worldPosition);
-            var width = Mathf.Max(0.01f, _topSurfaceSize.x);
-            var depth = Mathf.Max(0.01f, _topSurfaceSize.y);
-            if (localPosition.x < 0f || localPosition.x > width || localPosition.z < 0f || localPosition.z > depth)
+            if (!TryGetSurfaceLocalXZ(worldPosition, out var localXZ))
             {
                 uv = default;
                 return false;
             }
 
-            uv = new Vector2(localPosition.x / width, localPosition.z / depth);
+            uv = new Vector2(
+                localXZ.x / Mathf.Max(0.01f, _topSurfaceSize.x),
+                localXZ.y / Mathf.Max(0.01f, _topSurfaceSize.y));
+            return true;
+        }
+
+        /// <summary>
+        /// Maps a world position to the water root's local XZ surface coordinates. Unlike UV
+        /// distance, these coordinates preserve circular world-unit ring radii on rectangles.
+        /// </summary>
+        public bool TryGetSurfaceLocalXZ(Vector3 worldPosition, out Vector2 localXZ)
+        {
+            var localPosition = transform.InverseTransformPoint(worldPosition);
+            var width = Mathf.Max(0.01f, _topSurfaceSize.x);
+            var depth = Mathf.Max(0.01f, _topSurfaceSize.y);
+            if (!IsFinite(localPosition.x) || !IsFinite(localPosition.z) ||
+                localPosition.x < 0f || localPosition.x > width ||
+                localPosition.z < 0f || localPosition.z > depth)
+            {
+                localXZ = default;
+                return false;
+            }
+
+            localXZ = new Vector2(localPosition.x, localPosition.z);
             return true;
         }
 
@@ -388,6 +454,20 @@ namespace Water25D
             {
                 SanitizeSerializedValues();
                 EnsureModules();
+                var qualitySettings = GetQualitySettings();
+                var styleSettings = _styleProfile != null ? _styleProfile.GetSettings() : WaterStyleSettings.Default;
+                var presentationLayoutChanged = !_hasPresentationLayout ||
+                                                _presentationSurfaceMode != _surfaceMode ||
+                                                _presentationTopSurfaceSize != _topSurfaceSize;
+                _surfacePresentation.Configure(qualitySettings, styleSettings);
+                if (presentationLayoutChanged)
+                {
+                    _surfacePresentation.Reset();
+                }
+
+                _presentationSurfaceMode = _surfaceMode;
+                _presentationTopSurfaceSize = _topSurfaceSize;
+                _hasPresentationLayout = true;
                 _hierarchy.Initialise(
                     transform,
                     _topSurface,
@@ -408,7 +488,6 @@ namespace Water25D
                     _runtimeResources = new WaterRuntimeResources();
                 }
 
-                var qualitySettings = GetQualitySettings();
                 _geometry.ApplyIfNeeded(
                     _topSurfaceSize,
                     _frontSurfaceDepth,
@@ -468,6 +547,7 @@ namespace Water25D
                     _frontSortingOrder,
                     _reflectionMode,
                     _reflectionStrength,
+                    _surfacePresentation.RenderData,
                     out var topMaterial,
                     out var frontMaterial);
                 if ((topMaterial == null || frontMaterial == null) && !_hasLoggedMissingSurfaceShader)
@@ -547,6 +627,11 @@ namespace Water25D
                 _rendering = new WaterRenderingModule();
             }
 
+            if (_surfacePresentation == null)
+            {
+                _surfacePresentation = new WaterSurfacePresentationModule();
+            }
+
             if (_physics == null)
             {
                 _physics = new WaterPhysicsModule();
@@ -565,6 +650,12 @@ namespace Water25D
 
         private void DisposeRuntimeResources()
         {
+            _surfacePresentation?.Reset();
+            if (_hierarchy != null)
+            {
+                UploadSurfacePresentation();
+            }
+
             _reflection?.Dispose();
             _hierarchy?.FxController?.DisposeRuntimeResources();
             _ripple?.Dispose();
@@ -595,6 +686,24 @@ namespace Water25D
             _runtimeResources.Dispose();
             _runtimeResources = null;
             _geometry?.Reset();
+        }
+
+        private void UploadSurfacePresentation()
+        {
+            if (_surfacePresentation == null || _rendering == null || _hierarchy == null)
+            {
+                return;
+            }
+
+            _rendering.ApplySurfacePresentation(
+                _hierarchy.TopMeshRenderer,
+                _hierarchy.FrontMeshRenderer,
+                _surfacePresentation.RenderData);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

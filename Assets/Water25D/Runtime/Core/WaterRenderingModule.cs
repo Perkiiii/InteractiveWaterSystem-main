@@ -33,6 +33,7 @@ namespace Water25D
             int frontSortingOrder,
             WaterReflectionMode reflectionMode,
             float reflectionStrength,
+            WaterSurfaceRenderData surfacePresentationData,
             out Material topMaterial,
             out Material frontMaterial)
         {
@@ -76,8 +77,52 @@ namespace Water25D
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionEnabled, 0f);
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionFallback, reflectionMode == WaterReflectionMode.Stylized ? 1f : 0f);
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionStrength, reflectionStrength);
+            ApplySurfacePresentationToBlock(_propertyBlock, surfacePresentationData);
             topRenderer.SetPropertyBlock(_propertyBlock);
             frontRenderer.SetPropertyBlock(_propertyBlock);
+        }
+
+        /// <summary>
+        /// Applies only transient surface-presentation values. Each renderer's existing
+        /// property block is read first so reflection and unrelated instance state survive
+        /// ring animation without invoking the full authoring path.
+        /// </summary>
+        public void ApplySurfacePresentation(
+            MeshRenderer topRenderer,
+            MeshRenderer frontRenderer,
+            WaterSurfaceRenderData renderData)
+        {
+            if (renderData == null)
+            {
+                return;
+            }
+
+            ApplySurfacePresentation(topRenderer, renderData);
+            ApplySurfacePresentation(frontRenderer, renderData);
+        }
+
+        private void ApplySurfacePresentation(MeshRenderer renderer, WaterSurfaceRenderData renderData)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            renderer.GetPropertyBlock(_propertyBlock);
+            ApplySurfacePresentationToBlock(_propertyBlock, renderData);
+            renderer.SetPropertyBlock(_propertyBlock);
+        }
+
+        private static void ApplySurfacePresentationToBlock(MaterialPropertyBlock block, WaterSurfaceRenderData renderData)
+        {
+            if (block == null || renderData == null)
+            {
+                return;
+            }
+
+            block.SetFloat(WaterShaderIds.SurfaceRingCount, Mathf.Clamp(renderData.ActiveRingCount, 0, renderData.ShaderArrayLength));
+            block.SetVectorArray(WaterShaderIds.SurfaceRingsA, renderData.RingsA);
+            block.SetVectorArray(WaterShaderIds.SurfaceRingsB, renderData.RingsB);
         }
 
         private static int GetSortingLayerId(string sortingLayerName)

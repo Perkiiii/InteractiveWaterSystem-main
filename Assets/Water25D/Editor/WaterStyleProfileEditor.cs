@@ -47,6 +47,18 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawRingFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water Style Procedural Surface Rings", delegate
+            {
+                Property(serializedObject, "_ringLifetime", "Ring Lifetime", "Seconds before a procedural surface ring expires.");
+                Property(serializedObject, "_ringExpansionMultiplier", "Expansion Multiplier", "Multiplies the impact radius to determine the ring's final radius.");
+                Property(serializedObject, "_ringThickness", "Thickness", "Ring annulus thickness in local world units.");
+                Property(serializedObject, "_ringSoftness", "Softness", "Soft edge width around the ring annulus in local world units.");
+                Property(serializedObject, "_ringIntensity", "Intensity", "Highlight strength blended toward the profile foam colour.");
+            });
+        }
+
         public static bool DrawMaterialFields(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water Style Material Templates", delegate
@@ -144,6 +156,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Surface Colors", true, DrawSurfaceFields);
             DrawStandaloneSection(serializedObject, "Ambient Waves", true, DrawAmbientFields);
             DrawStandaloneSection(serializedObject, "Contact Ripples", false, DrawRippleFields);
+            DrawStandaloneSection(serializedObject, "Procedural Surface Rings", false, DrawRingFields);
             DrawStandaloneSection(serializedObject, "Material Templates", false, DrawMaterialFields);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

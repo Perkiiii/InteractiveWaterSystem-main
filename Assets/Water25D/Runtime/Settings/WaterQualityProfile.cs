@@ -20,6 +20,7 @@ namespace Water25D
         public float IdleTimeout;
         public float TopVerticesPerUnit;
         public int AmbientWaveBands;
+        public int MaximumSurfaceRings;
 
         public static WaterQualitySettings Default => new WaterQualitySettings
         {
@@ -36,7 +37,8 @@ namespace Water25D
             ImpactRadius = 0.22f,
             IdleTimeout = 2f,
             TopVerticesPerUnit = 8f,
-            AmbientWaveBands = 3
+            AmbientWaveBands = 3,
+            MaximumSurfaceRings = 8
         };
 
         public void Sanitize()
@@ -57,6 +59,7 @@ namespace Water25D
             IdleTimeout = Mathf.Max(0f, IdleTimeout);
             TopVerticesPerUnit = Mathf.Clamp(TopVerticesPerUnit, 0.5f, 64f);
             AmbientWaveBands = Mathf.Clamp(AmbientWaveBands, 1, 4);
+            MaximumSurfaceRings = Mathf.Clamp(MaximumSurfaceRings, 1, 16);
         }
 
         public Vector2Int CalculateRippleResolution(Vector2 topSurfaceSize)
@@ -87,7 +90,9 @@ namespace Water25D
 
         public bool Equals(WaterQualitySettings other)
         {
-            return SimulationEquals(other) && Mathf.Approximately(TopVerticesPerUnit, other.TopVerticesPerUnit);
+            return SimulationEquals(other) &&
+                   Mathf.Approximately(TopVerticesPerUnit, other.TopVerticesPerUnit) &&
+                   MaximumSurfaceRings == other.MaximumSurfaceRings;
         }
 
         public override bool Equals(object obj)
@@ -112,7 +117,8 @@ namespace Water25D
                 hash = hash * 31 + ImpactRadius.GetHashCode();
                 hash = hash * 31 + IdleTimeout.GetHashCode();
                 hash = hash * 31 + TopVerticesPerUnit.GetHashCode();
-                return hash * 31 + AmbientWaveBands;
+                hash = hash * 31 + AmbientWaveBands;
+                return hash * 31 + MaximumSurfaceRings;
             }
         }
     }
@@ -139,6 +145,9 @@ namespace Water25D
         [Min(0f)] [SerializeField] private float _idleTimeout = 2f;
         [Range(1, 4)] [SerializeField] private int _ambientWaveBands = 3;
 
+        [Header("Procedural Surface Rings")]
+        [Range(1, 16)] [SerializeField] private int _maximumSurfaceRings = 8;
+
         [Header("Geometry")]
         [Min(0.5f)] [SerializeField] private float _topVerticesPerUnit = 8f;
 
@@ -159,7 +168,10 @@ namespace Water25D
                 ImpactRadius = _impactRadius,
                 IdleTimeout = _idleTimeout,
                 TopVerticesPerUnit = _topVerticesPerUnit,
-                AmbientWaveBands = _ambientWaveBands
+                AmbientWaveBands = _ambientWaveBands,
+                MaximumSurfaceRings = _maximumSurfaceRings > 0
+                    ? _maximumSurfaceRings
+                    : WaterQualitySettings.Default.MaximumSurfaceRings
             };
             settings.Sanitize();
             return settings;
@@ -182,6 +194,7 @@ namespace Water25D
             _idleTimeout = settings.IdleTimeout;
             _topVerticesPerUnit = settings.TopVerticesPerUnit;
             _ambientWaveBands = settings.AmbientWaveBands;
+            _maximumSurfaceRings = settings.MaximumSurfaceRings;
         }
     }
 }

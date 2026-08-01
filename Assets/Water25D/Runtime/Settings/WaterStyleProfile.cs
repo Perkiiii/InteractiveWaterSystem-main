@@ -15,6 +15,11 @@ namespace Water25D
         public float AmbientWaveSpeed;
         public Vector2 AmbientWaveDirection;
         public float RippleAmplitude;
+        public float RingLifetime;
+        public float RingExpansionMultiplier;
+        public float RingThickness;
+        public float RingSoftness;
+        public float RingIntensity;
 
         public static WaterStyleSettings Default => new WaterStyleSettings
         {
@@ -26,7 +31,12 @@ namespace Water25D
             AmbientWaveLength = 3.5f,
             AmbientWaveSpeed = 0.8f,
             AmbientWaveDirection = new Vector2(1f, 0.15f),
-            RippleAmplitude = 0.18f
+            RippleAmplitude = 0.18f,
+            RingLifetime = 1.25f,
+            RingExpansionMultiplier = 6f,
+            RingThickness = 0.05f,
+            RingSoftness = 0.04f,
+            RingIntensity = 0.75f
         };
 
         public void Sanitize()
@@ -35,6 +45,11 @@ namespace Water25D
             AmbientWaveLength = Mathf.Max(0.01f, AmbientWaveLength);
             AmbientWaveSpeed = Mathf.Max(0f, AmbientWaveSpeed);
             RippleAmplitude = Mathf.Max(0f, RippleAmplitude);
+            RingLifetime = SanitizePositive(RingLifetime, Default.RingLifetime, 0.01f, 60f);
+            RingExpansionMultiplier = SanitizePositive(RingExpansionMultiplier, Default.RingExpansionMultiplier, 0.01f, 100f);
+            RingThickness = SanitizePositive(RingThickness, Default.RingThickness, 0.001f, 10f);
+            RingSoftness = SanitizeNonNegative(RingSoftness, Default.RingSoftness, 0f, 10f);
+            RingIntensity = IsFinite(RingIntensity) ? Mathf.Clamp01(RingIntensity) : Default.RingIntensity;
             if (AmbientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 AmbientWaveDirection = Vector2.right;
@@ -79,7 +94,12 @@ namespace Water25D
                    Mathf.Approximately(AmbientWaveLength, other.AmbientWaveLength) &&
                    Mathf.Approximately(AmbientWaveSpeed, other.AmbientWaveSpeed) &&
                    AmbientWaveDirection == other.AmbientWaveDirection &&
-                   Mathf.Approximately(RippleAmplitude, other.RippleAmplitude);
+                   Mathf.Approximately(RippleAmplitude, other.RippleAmplitude) &&
+                   Mathf.Approximately(RingLifetime, other.RingLifetime) &&
+                   Mathf.Approximately(RingExpansionMultiplier, other.RingExpansionMultiplier) &&
+                   Mathf.Approximately(RingThickness, other.RingThickness) &&
+                   Mathf.Approximately(RingSoftness, other.RingSoftness) &&
+                   Mathf.Approximately(RingIntensity, other.RingIntensity);
         }
 
         public override bool Equals(object obj)
@@ -99,8 +119,38 @@ namespace Water25D
                 hash = hash * 31 + AmbientWaveLength.GetHashCode();
                 hash = hash * 31 + AmbientWaveSpeed.GetHashCode();
                 hash = hash * 31 + AmbientWaveDirection.GetHashCode();
-                return hash * 31 + RippleAmplitude.GetHashCode();
+                hash = hash * 31 + RippleAmplitude.GetHashCode();
+                hash = hash * 31 + RingLifetime.GetHashCode();
+                hash = hash * 31 + RingExpansionMultiplier.GetHashCode();
+                hash = hash * 31 + RingThickness.GetHashCode();
+                hash = hash * 31 + RingSoftness.GetHashCode();
+                return hash * 31 + RingIntensity.GetHashCode();
             }
+        }
+
+        private static float SanitizePositive(float value, float fallback, float minimum, float maximum)
+        {
+            if (!IsFinite(value) || value <= 0f)
+            {
+                value = fallback;
+            }
+
+            return Mathf.Clamp(value, minimum, maximum);
+        }
+
+        private static float SanitizeNonNegative(float value, float fallback, float minimum, float maximum)
+        {
+            if (!IsFinite(value) || value < 0f)
+            {
+                value = fallback;
+            }
+
+            return Mathf.Clamp(value, minimum, maximum);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 
@@ -121,6 +171,13 @@ namespace Water25D
 
         [Header("Contact Ripples")]
         [Min(0f)] [SerializeField] private float _rippleAmplitude = 0.18f;
+
+        [Header("Procedural Surface Rings")]
+        [Min(0.01f)] [SerializeField] private float _ringLifetime = 1.25f;
+        [Min(0.01f)] [SerializeField] private float _ringExpansionMultiplier = 6f;
+        [Min(0.001f)] [SerializeField] private float _ringThickness = 0.05f;
+        [Min(0f)] [SerializeField] private float _ringSoftness = 0.04f;
+        [Range(0f, 1f)] [SerializeField] private float _ringIntensity = 0.75f;
 
         [Header("Optional Material Templates")]
         [Tooltip("Optional project or package-owned template. It is never mutated at runtime.")]
@@ -143,7 +200,12 @@ namespace Water25D
                 AmbientWaveLength = _ambientWaveLength,
                 AmbientWaveSpeed = _ambientWaveSpeed,
                 AmbientWaveDirection = _ambientWaveDirection,
-                RippleAmplitude = _rippleAmplitude
+                RippleAmplitude = _rippleAmplitude,
+                RingLifetime = _ringLifetime,
+                RingExpansionMultiplier = _ringExpansionMultiplier,
+                RingThickness = _ringThickness,
+                RingSoftness = _ringSoftness,
+                RingIntensity = _ringIntensity
             };
             settings.Sanitize();
             return settings;
@@ -155,6 +217,12 @@ namespace Water25D
             _ambientWaveLength = Mathf.Max(0.01f, _ambientWaveLength);
             _ambientWaveSpeed = Mathf.Max(0f, _ambientWaveSpeed);
             _rippleAmplitude = Mathf.Max(0f, _rippleAmplitude);
+            var settings = GetSettings();
+            _ringLifetime = settings.RingLifetime;
+            _ringExpansionMultiplier = settings.RingExpansionMultiplier;
+            _ringThickness = settings.RingThickness;
+            _ringSoftness = settings.RingSoftness;
+            _ringIntensity = settings.RingIntensity;
             if (_ambientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 _ambientWaveDirection = Vector2.right;

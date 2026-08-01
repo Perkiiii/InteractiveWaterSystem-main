@@ -87,7 +87,7 @@ namespace Water25D.Editor
             var open = BeginTopLevelSection("Basic", "Basic");
             if (open)
             {
-                Property("_surfaceMode", "Surface Mode", "Existing serialized controllers remain SimulatedRipples. New controllers use FlatStylized; flat procedural interactions are not implemented in this slice.");
+                Property("_surfaceMode", "Surface Mode", "Existing serialized controllers remain SimulatedRipples. New controllers use FlatStylized; surface impacts use CRT or procedural rings according to this mode.");
                 var size = serializedObject.FindProperty("_topSurfaceSize");
                 if (size != null)
                 {
@@ -200,19 +200,45 @@ namespace Water25D.Editor
             }
 
             var flatMode = GetSurfaceMode() == WaterSurfaceMode.FlatStylized;
+            EditorGUILayout.HelpBox(
+                flatMode
+                    ? "Procedural surface rings active. FlatStylized does not allocate or update the CRT; contact foam, wakes and splash redesign remain separate slices."
+                    : "SimulatedRipples uses the instance-owned CRT for surface impacts. Procedural surface rings are inactive in this mode.",
+                MessageType.Info);
+
+            Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
+            Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
+            Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
+
+            var qualityProfile = GetQualityProfile();
+            var styleProfile = GetStyleProfile();
             if (flatMode)
             {
-                EditorGUILayout.HelpBox("FlatStylized does not allocate or update the CRT. Procedural rings, foam, wakes and splashes are not implemented in this slice.", MessageType.Info);
-            }
+                if (qualityProfile != null && _qualityProfileSerializedObject != null)
+                {
+                    DrawSharedProfileNotice(qualityProfile, false);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Surface Rings", "Rendering.ContactRipples.SurfaceRings", WaterQualityProfileEditor.DrawSurfaceRingFields);
+                }
 
-            using (new EditorGUI.DisabledScope(flatMode))
+                if (styleProfile != null && _styleProfileSerializedObject != null)
+                {
+                    DrawSharedProfileNotice(styleProfile, true);
+                    WaterStyleProfileEditor.DrawRingFields(_styleProfileSerializedObject);
+                }
+
+                var flatController = target as Water25DController;
+                if (flatController != null)
+                {
+                    Metric("Maximum Active Rings", qualityProfile != null
+                        ? qualityProfile.GetSettings().MaximumSurfaceRings
+                        : WaterQualitySettings.Default.MaximumSurfaceRings);
+                    Metric("Runtime Active Rings", flatController.ActiveSurfaceRingCount);
+                    Metric("Runtime Replacements", flatController.ReplacedSurfaceRingCount);
+                }
+            }
+            else
             {
                 Property("_enableRippleSimulation", "Ripples Enabled", "Allocate and update the instance-owned CRT ripple state in Play Mode.");
-                Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
-                Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
-                Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
-
-                var qualityProfile = GetQualityProfile();
                 if (qualityProfile != null && _qualityProfileSerializedObject != null)
                 {
                     DrawSharedProfileNotice(qualityProfile, false);
@@ -221,7 +247,6 @@ namespace Water25D.Editor
                     DrawNestedQualitySection(_qualityProfileSerializedObject, "Wave Behaviour", "Rendering.ContactRipples.WaveBehaviour", WaterQualityProfileEditor.DrawWaveBehaviourFields);
                 }
 
-                var styleProfile = GetStyleProfile();
                 if (styleProfile != null && _styleProfileSerializedObject != null)
                 {
                     WaterStyleProfileEditor.DrawRippleFields(_styleProfileSerializedObject);
@@ -413,8 +438,10 @@ namespace Water25D.Editor
 
             EditorGUILayout.LabelField("Performance Estimates", EditorStyles.boldLabel);
             var metrics = Water25DInspectorUtility.CalculateMetrics(controller);
+            var flatMode = GetSurfaceMode() == WaterSurfaceMode.FlatStylized;
             Metric("Surface Mode", GetSurfaceMode().ToString());
-            Metric("Ripple Simulation", GetSurfaceMode() == WaterSurfaceMode.SimulatedRipples ? "Active in Play Mode" : "Inactive (FlatStylized)");
+            Metric("Ripple Simulation", flatMode ? "Inactive (FlatStylized)" : "Active in Play Mode");
+            Metric("Procedural Rings", flatMode ? "Active in FlatStylized" : "Inactive (SimulatedRipples)");
             Metric("Top Mesh Vertices", metrics.TopVertexCount.x * metrics.TopVertexCount.y);
             Metric("Top Mesh Triangles", metrics.TopTriangleCount);
             Metric("Front Mesh Vertices", metrics.FrontVertexCount);
@@ -429,6 +456,12 @@ namespace Water25D.Editor
             Metric("Propagated Cells / Second", metrics.PropagatedCellsPerSecond.ToString("N0"));
             Metric("Maximum Impacts / Update", metrics.MaximumImpactsPerStep);
             Metric("Queue Capacity", metrics.MaximumQueuedImpacts);
+            var qualityProfile = GetQualityProfile();
+            Metric("Maximum Active Rings", qualityProfile != null
+                ? qualityProfile.GetSettings().MaximumSurfaceRings
+                : WaterQualitySettings.Default.MaximumSurfaceRings);
+            Metric("Runtime Active Rings", controller != null ? controller.ActiveSurfaceRingCount : 0);
+            Metric("Runtime Ring Replacements", controller != null ? controller.ReplacedSurfaceRingCount : 0);
 
             if (GetReflectionMode() == WaterReflectionMode.Planar)
             {
@@ -467,9 +500,10 @@ namespace Water25D.Editor
 
             if (Application.isPlaying && controller != null)
             {
-                using (new EditorGUI.DisabledScope(!GetBool("_enableRippleSimulation", true) || GetSurfaceMode() != WaterSurfaceMode.SimulatedRipples))
+                var canTestSurfaceImpact = GetSurfaceMode() == WaterSurfaceMode.FlatStylized || GetBool("_enableRippleSimulation", true);
+                using (new EditorGUI.DisabledScope(!canTestSurfaceImpact))
                 {
-                    if (GUILayout.Button(new GUIContent("Test Ripple at Center", "Queue a test impact at the centre of the water in Play Mode."), Water25DInspectorStyles.SmallButton))
+                    if (GUILayout.Button(new GUIContent("Test Surface Impact at Center", "Create a mode-appropriate test impact at the centre of the water in Play Mode."), Water25DInspectorStyles.SmallButton))
                     {
                         CreateTestRipple(controller);
                     }
@@ -1117,7 +1151,7 @@ namespace Water25D.Editor
 
             var size = controller.TopSurfaceSize;
             var localPosition = new Vector3(size.x * 0.5f, controller.WaterlineLocalY, size.y * 0.5f);
-            controller.CreateContactRippleAt(controller.transform.TransformPoint(localPosition), 0.75f, true);
+            controller.CreateSurfaceImpactAt(controller.transform.TransformPoint(localPosition), 0.75f, true);
         }
 
         private void OnUndoRedo()
