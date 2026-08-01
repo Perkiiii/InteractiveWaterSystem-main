@@ -2,7 +2,7 @@
 
 1. In the Unity Editor, use `GameObject > Water 2.5D > Water25D Controller`, or add `Water25DController` to an empty GameObject.
 2. Select the root and inspect the generated `TopSurface`, `FrontSurface`, `SurfaceCrossingTrigger`, `BuoyancyVolume`, `ReflectionAnchor`, and `FXRoot` children. The controller repairs missing expected children without deleting unrelated children.
-3. Assign `WaterStyleProfile` and `WaterQualityProfile` assets when shared authored settings are needed. Without material templates, the package shaders are used through per-instance runtime materials.
+3. The creation menu assigns `Water25D_DefaultStyle`, `Water25D_MediumQuality`, `Water25D_Top.mat`, `Water25D_Front.mat`, and `Water25D_RippleSimulation.mat` as persistent package-owned defaults. Override them only when the water needs project-owned templates; runtime property blocks and ripple textures remain instance-owned.
 4. Place the root at the desired waterline. Set `Waterline Local Y` when the root transform should remain at another local anchor.
 5. Configure `Surface Interaction Layers`, `Surface Trigger Interaction Layers`, and `Buoyancy Layers` independently. The thin surface trigger produces enter/exit events and impacts; the full volume provides buoyancy, drag, submerged state, and bubbles.
 6. Keep `Reflection Mode` at `Stylized` for a camera-free presentation. Select `Planar` only when a planar reflection is required; compatible water planes share a manager-owned camera and render texture.
@@ -10,7 +10,7 @@
 
 The default quality settings produce a 320 x 104 ripple state for a 20 x 6.5 top surface at 16 texels per world unit. The state is runtime-owned, rectangular, RGHalf when supported, has no mipmaps, and is released when the water is disabled or destroyed.
 
-The top surface is local XZ, from `(0, waterline, 0)` to `(width, waterline, visual depth)`. The front surface is local XY and extends downward by physical depth. Gameplay remains a flat 2D surface with an explicit depth lane; it does not read GPU height data.
+The top surface is local XZ, from `(0, waterline, 0)` to `(width, waterline, visual depth)`. The front surface is local XY and extends downward by physical depth. Gameplay remains a flat 2D surface with an explicit depth lane; it does not read GPU height data. Generated preview meshes are transient and are rebuilt after a domain reload or scene reopen; persistent surface materials are saved with the scene or prefab.
 
 ## Manual verification
 

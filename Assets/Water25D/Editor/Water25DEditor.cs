@@ -6,6 +6,11 @@ namespace Water25D.Editor
     [CustomEditor(typeof(Water25DController))]
     public sealed class Water25DEditor : UnityEditor.Editor
     {
+        private void OnEnable()
+        {
+            Water25DEditorDefaults.AssignDefaults((Water25DController)target);
+        }
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -40,16 +45,64 @@ namespace Water25D.Editor
 
             serializedObject.ApplyModifiedProperties();
 
+            DrawAuthoringStatus((Water25DController)target);
+
             EditorGUILayout.Space();
             EditorGUILayout.HelpBox(
-                "Generated children are found by their names and serialized references. Repairing the hierarchy never deletes unrelated children.",
+                "Generated children are found by their names and serialized references. Preview meshes are transient and are rebuilt after reload; package surface materials and profiles are persistent assets.",
                 MessageType.Info);
+            if (GUILayout.Button("Assign Package Defaults"))
+            {
+                var controller = (Water25DController)target;
+                Undo.RecordObject(controller, "Assign Water 2.5D Package Defaults");
+                Water25DEditorDefaults.AssignDefaults(controller);
+                serializedObject.Update();
+                EditorUtility.SetDirty(controller);
+            }
             if (GUILayout.Button("Repair Hierarchy and Rebuild"))
             {
                 var controller = (Water25DController)target;
                 Undo.RecordObject(controller, "Repair 2.5D Water Hierarchy");
                 controller.RepairHierarchyAndRebuild();
                 EditorUtility.SetDirty(controller);
+            }
+        }
+
+        private static void DrawAuthoringStatus(Water25DController controller)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("Authoring Status", EditorStyles.boldLabel);
+
+            var qualitySettings = controller.QualityProfile != null
+                ? controller.QualityProfile.GetSettings()
+                : WaterQualitySettings.Default;
+            var rippleResolution = qualitySettings.CalculateRippleResolution(controller.TopSurfaceSize);
+            EditorGUILayout.LabelField("Ripple State", rippleResolution.x + " x " + rippleResolution.y + " texels");
+            EditorGUILayout.LabelField("Generated Meshes", "Transient editor/runtime resources");
+
+            if (controller.StyleProfile == null || controller.QualityProfile == null)
+            {
+                EditorGUILayout.HelpBox("A package style or quality profile is not assigned. Use Assign Package Defaults or assign authored profiles.", MessageType.Warning);
+            }
+
+            DrawMaterialStatus(controller.TopSurface, "Top Surface", "Water25D/Top Surface");
+            DrawMaterialStatus(controller.FrontSurface, "Front Surface", "Water25D/Front Surface");
+            EditorGUILayout.EndVertical();
+        }
+
+        private static void DrawMaterialStatus(Transform surface, string label, string expectedShader)
+        {
+            var renderer = surface != null ? surface.GetComponent<MeshRenderer>() : null;
+            var material = renderer != null ? renderer.sharedMaterial : null;
+            if (material == null)
+            {
+                EditorGUILayout.HelpBox(label + " has no persistent material assigned.", MessageType.Error);
+                return;
+            }
+
+            if (material.shader == null || !material.shader.isSupported || material.shader.name != expectedShader)
+            {
+                EditorGUILayout.HelpBox(label + " material shader is missing, unsupported, or unexpected.", MessageType.Error);
             }
         }
 

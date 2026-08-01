@@ -79,5 +79,37 @@ namespace Water25D.Tests
                 Object.DestroyImmediate(root);
             }
         }
+
+        [Test]
+        public void RippleBatchInjectsAllQueuedImpactsBeforeOneFullPropagationUpdate()
+        {
+            var resources = new WaterRuntimeResources();
+            var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Water25D/Materials/Water25D_RippleSimulation.mat");
+            var settings = WaterQualitySettings.Default;
+            settings.SimulationFrequency = 4f;
+            settings.MaximumImpactsPerStep = 8;
+            settings.MaximumQueuedImpacts = 8;
+            settings.Sanitize();
+            CustomRenderTextureRippleSimulator simulator = null;
+            try
+            {
+                simulator = new CustomRenderTextureRippleSimulator(resources, new Vector2(4f, 2f), settings, material);
+                Assert.IsTrue(simulator.IsAvailable);
+                for (var i = 0; i < 4; i++)
+                {
+                    simulator.EnqueueImpact(new WaterRippleImpact(new Vector2(0.2f + i * 0.15f, 0.5f), 0.5f, 0.2f, true));
+                }
+
+                simulator.Tick(0.25f, true);
+
+                Assert.AreEqual(4, simulator.ImpactInjectionUpdateCount);
+                Assert.AreEqual(1, simulator.FullSurfacePropagationUpdateCount);
+            }
+            finally
+            {
+                simulator?.Dispose();
+                resources.Dispose();
+            }
+        }
     }
 }

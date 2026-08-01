@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.Rendering;
 using Water25D.FX;
 using Water25D.Rendering;
 
@@ -11,16 +10,10 @@ namespace Water25D
     /// Coordinates geometry, presentation, simulation and the two independent 2D physics volumes.
     /// Generated resources belong to this instance and are never taken from the reference systems.
     /// </summary>
+    [ExecuteAlways]
     [DisallowMultipleComponent]
     public sealed class Water25DController : MonoBehaviour
     {
-        private const string TopSurfaceName = "TopSurface";
-        private const string FrontSurfaceName = "FrontSurface";
-        private const string SurfaceCrossingTriggerName = "SurfaceCrossingTrigger";
-        private const string BuoyancyVolumeName = "BuoyancyVolume";
-        private const string ReflectionAnchorName = "ReflectionAnchor";
-        private const string FxRootName = "FXRoot";
-
         [Header("Dimensions")]
         [Tooltip("Width and visual depth of the XZ top surface in local units.")]
         [SerializeField] private Vector2 _topSurfaceSize = new Vector2(20f, 6.5f);
@@ -102,33 +95,15 @@ namespace Water25D
         [SerializeField, HideInInspector] private Transform _reflectionAnchor;
         [SerializeField, HideInInspector] private Transform _fxRoot;
 
-        private MeshFilter _topMeshFilter;
-        private MeshRenderer _topMeshRenderer;
-        private SortingGroup _topSortingGroup;
-        private MeshFilter _frontMeshFilter;
-        private MeshRenderer _frontMeshRenderer;
-        private SortingGroup _frontSortingGroup;
-        private BoxCollider2D _surfaceCollider;
-        private WaterSurfaceInteraction2D _surfaceInteraction;
-        private BoxCollider2D _buoyancyCollider;
-        private BuoyancyEffector2D _buoyancyEffector;
-        private WaterPhysicsVolume2D _physicsVolume;
-        private WaterFXController _fxController;
-
         [NonSerialized] private WaterRuntimeResources _runtimeResources;
-        [NonSerialized] private IWaterRippleSimulator _rippleSimulator;
-        [NonSerialized] private MaterialPropertyBlock _materialPropertyBlock;
-        [NonSerialized] private WaterQualitySettings _appliedQualitySettings;
-        [NonSerialized] private Vector2 _appliedTopSurfaceSize;
-        [NonSerialized] private float _appliedFrontSurfaceDepth;
-        [NonSerialized] private float _appliedWaterlineLocalY;
-        [NonSerialized] private Vector2 _appliedRippleWaterSize;
-        [NonSerialized] private bool _geometryApplied;
-        [NonSerialized] private bool _hasInitializedOnce;
+        [NonSerialized] private WaterHierarchyModule _hierarchy;
+        [NonSerialized] private WaterGeometryModule _geometry;
+        [NonSerialized] private WaterRenderingModule _rendering;
+        [NonSerialized] private WaterPhysicsModule _physics;
+        [NonSerialized] private WaterRippleModule _ripple;
+        [NonSerialized] private WaterReflectionModule _reflection;
         [NonSerialized] private bool _isApplyingChanges;
         [NonSerialized] private bool _hasLoggedMissingSurfaceShader;
-        [NonSerialized] private bool _hasLoggedMissingRippleShader;
-        [NonSerialized] private WaterReflectionManager.ReflectionRegistration _reflectionRegistration;
         [NonSerialized] private bool _effectsConfigurationPending;
         [NonSerialized] private bool _reflectionConfigurationPending;
 
@@ -144,35 +119,33 @@ namespace Water25D
         public float InteractionDepth01 => _interactionDepth01;
         public WaterStyleProfile StyleProfile => _styleProfile;
         public WaterQualityProfile QualityProfile => _qualityProfile;
-        public Transform TopSurface => _topSurface;
-        public Transform FrontSurface => _frontSurface;
-        public Transform SurfaceCrossingTrigger => _surfaceCrossingTrigger;
-        public Transform BuoyancyVolume => _buoyancyVolume;
-        public Transform ReflectionAnchor => _reflectionAnchor;
-        public Transform FxRoot => _fxRoot;
+        public Transform TopSurface => _hierarchy != null ? _hierarchy.TopSurface : _topSurface;
+        public Transform FrontSurface => _hierarchy != null ? _hierarchy.FrontSurface : _frontSurface;
+        public Transform SurfaceCrossingTrigger => _hierarchy != null ? _hierarchy.SurfaceCrossingTrigger : _surfaceCrossingTrigger;
+        public Transform BuoyancyVolume => _hierarchy != null ? _hierarchy.BuoyancyVolume : _buoyancyVolume;
+        public Transform ReflectionAnchor => _hierarchy != null ? _hierarchy.ReflectionAnchor : _reflectionAnchor;
+        public Transform FxRoot => _hierarchy != null ? _hierarchy.FxRoot : _fxRoot;
         public WaterReflectionMode ReflectionMode => _reflectionMode;
         public Camera ReflectionCameraSource => _reflectionCameraSource;
-        public Texture RippleTexture => _rippleSimulator != null ? _rippleSimulator.HeightTexture : null;
-        public bool IsRippleSimulationSuspended => _rippleSimulator != null && _rippleSimulator.IsSuspended;
-        public int DroppedRippleImpactCount => _rippleSimulator != null ? _rippleSimulator.DroppedImpactCount : 0;
-
-        private void Awake()
-        {
-            ApplyAuthoringChanges();
-        }
+        public Texture RippleTexture => _ripple != null ? _ripple.HeightTexture : null;
+        public bool IsRippleSimulationSuspended => _ripple != null && _ripple.IsSuspended;
+        public int DroppedRippleImpactCount => _ripple != null ? _ripple.DroppedImpactCount : 0;
 
         private void OnEnable()
         {
+            EnsureModules();
             ApplyAuthoringChanges();
         }
 
-        private void Start()
+        private void Reset()
         {
+            EnsureModules();
             ApplyAuthoringChanges();
         }
 
         private void Update()
         {
+            EnsureModules();
             if (_effectsConfigurationPending)
             {
                 ConfigureEffects();
@@ -185,14 +158,9 @@ namespace Water25D
                 _reflectionConfigurationPending = false;
             }
 
-            if (_rippleSimulator == null)
-            {
-                return;
-            }
-
-            var isVisible = (_topMeshRenderer != null && _topMeshRenderer.isVisible) ||
-                            (_frontMeshRenderer != null && _frontMeshRenderer.isVisible);
-            _rippleSimulator.Tick(Time.deltaTime, isVisible);
+            var isVisible = (_hierarchy.TopMeshRenderer != null && _hierarchy.TopMeshRenderer.isVisible) ||
+                            (_hierarchy.FrontMeshRenderer != null && _hierarchy.FrontMeshRenderer.isVisible);
+            _ripple.Tick(Time.deltaTime, isVisible);
         }
 
         private void OnDisable()
@@ -208,7 +176,7 @@ namespace Water25D
         private void OnValidate()
         {
             SanitizeSerializedValues();
-            if (_isApplyingChanges || !isActiveAndEnabled || (!Application.isPlaying && !_hasInitializedOnce))
+            if (_isApplyingChanges || !isActiveAndEnabled)
             {
                 return;
             }
@@ -253,17 +221,13 @@ namespace Water25D
                 return false;
             }
 
-            if (_rippleSimulator == null)
-            {
-                EnsureRippleSimulator(GetQualitySettings());
-            }
-
-            if (_rippleSimulator == null || !_rippleSimulator.IsAvailable)
+            EnsureModules();
+            if (!_ripple.IsAvailable)
             {
                 return false;
             }
 
-            _rippleSimulator.EnqueueImpact(new WaterRippleImpact(uv, initialStrength, radius, initialUp));
+            _ripple.EnqueueImpact(new WaterRippleImpact(uv, initialStrength, radius, initialUp));
             return true;
         }
 
@@ -309,7 +273,7 @@ namespace Water25D
 
         internal void NotifyInteraction(WaterInteractionEvent eventData)
         {
-            _fxController?.HandleInteraction(eventData);
+            _hierarchy?.FxController?.HandleInteraction(eventData);
             switch (eventData.Type)
             {
                 case WaterInteractionEventType.SurfaceEnter:
@@ -342,29 +306,94 @@ namespace Water25D
             try
             {
                 SanitizeSerializedValues();
-                EnsureHierarchy();
+                EnsureModules();
+                _hierarchy.Initialise(
+                    transform,
+                    _topSurface,
+                    _frontSurface,
+                    _surfaceCrossingTrigger,
+                    _buoyancyVolume,
+                    _reflectionAnchor,
+                    _fxRoot,
+                    _synchronizeGeneratedChildLayers);
+                _topSurface = _hierarchy.TopSurface;
+                _frontSurface = _hierarchy.FrontSurface;
+                _surfaceCrossingTrigger = _hierarchy.SurfaceCrossingTrigger;
+                _buoyancyVolume = _hierarchy.BuoyancyVolume;
+                _reflectionAnchor = _hierarchy.ReflectionAnchor;
+                _fxRoot = _hierarchy.FxRoot;
                 if (_runtimeResources == null)
                 {
                     _runtimeResources = new WaterRuntimeResources();
                 }
 
                 var qualitySettings = GetQualitySettings();
-                ApplyGeometryIfNeeded(qualitySettings);
-                ConfigurePhysicsVolumes();
+                _geometry.ApplyIfNeeded(
+                    _topSurfaceSize,
+                    _frontSurfaceDepth,
+                    _waterlineLocalY,
+                    qualitySettings,
+                    _runtimeResources,
+                    _hierarchy.TopMeshFilter,
+                    _hierarchy.FrontMeshFilter);
+                _physics.Apply(
+                    this,
+                    _hierarchy,
+                    _topSurfaceSize,
+                    _frontSurfaceDepth,
+                    _waterlineLocalY,
+                    _surfaceTriggerThickness,
+                    _enableSurfaceInteraction,
+                    _enableBuoyancy,
+                    _surfaceInteractionLayers,
+                    _surfaceTriggerInteractionLayers,
+                    _buoyancyLayers,
+                    _includeTriggerCollidersInSurfaceInteraction,
+                    _buoyancyDensity,
+                    _buoyancyLinearDamping,
+                    _buoyancyAngularDamping,
+                    _enableCustomDrag,
+                    _customLinearDrag,
+                    _customAngularDrag);
                 _effectsConfigurationPending = true;
 
                 if (Application.isPlaying && _enableRippleSimulation)
                 {
-                    EnsureRippleSimulator(qualitySettings);
+                    _ripple.Ensure(_runtimeResources, _topSurfaceSize, qualitySettings, _rippleSimulationMaterialTemplate, this);
                 }
                 else
                 {
-                    DisposeRippleSimulator();
+                    _ripple.Dispose();
                 }
 
-                ApplyRendererBindings();
+                _rendering.Apply(
+                    _runtimeResources,
+                    _hierarchy.TopMeshRenderer,
+                    _hierarchy.TopSortingGroup,
+                    _hierarchy.FrontMeshRenderer,
+                    _hierarchy.FrontSortingGroup,
+                    _topMaterialTemplate,
+                    _frontMaterialTemplate,
+                    _styleProfile,
+                    _topSurfaceSize,
+                    _frontSurfaceDepth,
+                    _waterlineLocalY,
+                    qualitySettings,
+                    RippleTexture,
+                    _topSortingLayerName,
+                    _topSortingOrder,
+                    _frontSortingLayerName,
+                    _frontSortingOrder,
+                    _reflectionMode,
+                    _reflectionStrength,
+                    out var topMaterial,
+                    out var frontMaterial);
+                if ((topMaterial == null || frontMaterial == null) && !_hasLoggedMissingSurfaceShader)
+                {
+                    Debug.LogWarning("Water25D is missing a top or front surface material. Assign package defaults or reimport the package shaders.", this);
+                    _hasLoggedMissingSurfaceShader = true;
+                }
                 _reflectionConfigurationPending = true;
-                _hasInitializedOnce = true;
             }
             finally
             {
@@ -372,197 +401,11 @@ namespace Water25D
             }
         }
 
-        private void ApplyGeometryIfNeeded(WaterQualitySettings qualitySettings)
-        {
-            var vertexCount = WaterMeshBuilder.CalculateTopVertexCount(_topSurfaceSize, qualitySettings.TopVerticesPerUnit);
-            var geometryChanged = !_geometryApplied ||
-                                  _appliedTopSurfaceSize != _topSurfaceSize ||
-                                  !Mathf.Approximately(_appliedFrontSurfaceDepth, _frontSurfaceDepth) ||
-                                  !Mathf.Approximately(_appliedWaterlineLocalY, _waterlineLocalY) ||
-                                  _appliedQualitySettings.TopVerticesPerUnit != qualitySettings.TopVerticesPerUnit;
-            if (!geometryChanged)
-            {
-                return;
-            }
-
-            if (_topMeshFilter != null)
-            {
-                _topMeshFilter.sharedMesh = null;
-            }
-
-            if (_frontMeshFilter != null)
-            {
-                _frontMeshFilter.sharedMesh = null;
-            }
-
-            _runtimeResources.ReplaceTopMesh(WaterMeshBuilder.BuildTopMesh(_topSurfaceSize, vertexCount, "Water25D Top Mesh"));
-            _runtimeResources.ReplaceFrontMesh(WaterMeshBuilder.BuildFrontMesh(_topSurfaceSize, _frontSurfaceDepth, vertexCount.x, "Water25D Front Mesh"));
-            _topMeshFilter.sharedMesh = _runtimeResources.TopMesh;
-            _frontMeshFilter.sharedMesh = _runtimeResources.FrontMesh;
-
-            _appliedTopSurfaceSize = _topSurfaceSize;
-            _appliedFrontSurfaceDepth = _frontSurfaceDepth;
-            _appliedWaterlineLocalY = _waterlineLocalY;
-            _appliedQualitySettings = qualitySettings;
-            _geometryApplied = true;
-        }
-
-        private void ConfigurePhysicsVolumes()
-        {
-            var width = Mathf.Max(0.01f, _topSurfaceSize.x);
-            var depth = Mathf.Max(0.01f, _frontSurfaceDepth);
-            var triggerThickness = Mathf.Max(0.01f, _surfaceTriggerThickness);
-
-            _topSurface.localPosition = new Vector3(0f, _waterlineLocalY, 0f);
-            _frontSurface.localPosition = new Vector3(0f, _waterlineLocalY, 0f);
-            _surfaceCrossingTrigger.localPosition = new Vector3(width * 0.5f, _waterlineLocalY, 0f);
-            _buoyancyVolume.localPosition = new Vector3(width * 0.5f, _waterlineLocalY, 0f);
-            _reflectionAnchor.localPosition = new Vector3(width * 0.5f, _waterlineLocalY, 0f);
-            _fxRoot.localPosition = new Vector3(width * 0.5f, _waterlineLocalY, 0f);
-
-            _surfaceCollider.size = new Vector2(width, triggerThickness);
-            _surfaceCollider.offset = Vector2.zero;
-            _surfaceCollider.isTrigger = true;
-            _surfaceCollider.enabled = _enableSurfaceInteraction;
-            _surfaceInteraction.Configure(
-                this,
-                _surfaceInteractionLayers,
-                _surfaceTriggerInteractionLayers,
-                _includeTriggerCollidersInSurfaceInteraction);
-            _surfaceInteraction.enabled = _enableSurfaceInteraction;
-
-            _buoyancyCollider.size = new Vector2(width, depth);
-            _buoyancyCollider.offset = new Vector2(0f, -depth * 0.5f);
-            _buoyancyCollider.isTrigger = true;
-            _buoyancyCollider.enabled = _enableBuoyancy;
-            _physicsVolume.Configure(
-                this,
-                _buoyancyLayers,
-                _enableCustomDrag,
-                _customLinearDrag,
-                _customAngularDrag);
-            _physicsVolume.enabled = _enableBuoyancy;
-
-            if (_enableBuoyancy && _buoyancyEffector == null)
-            {
-                _buoyancyEffector = _buoyancyVolume.gameObject.AddComponent<BuoyancyEffector2D>();
-            }
-
-            if (_buoyancyEffector != null)
-            {
-                _buoyancyEffector.enabled = _enableBuoyancy;
-                _buoyancyEffector.surfaceLevel = 0f;
-                _buoyancyEffector.density = Mathf.Max(0f, _buoyancyDensity);
-                _buoyancyEffector.linearDamping = Mathf.Max(0f, _buoyancyLinearDamping);
-                _buoyancyEffector.angularDamping = Mathf.Max(0f, _buoyancyAngularDamping);
-                _buoyancyEffector.flowMagnitude = 0f;
-                _buoyancyEffector.useColliderMask = true;
-                _buoyancyEffector.colliderMask = _buoyancyLayers.value;
-            }
-
-            _buoyancyCollider.usedByEffector = _enableBuoyancy && _buoyancyEffector != null;
-        }
-
-        private void EnsureRippleSimulator(WaterQualitySettings qualitySettings)
-        {
-            var materialTemplate = _rippleSimulationMaterialTemplate;
-            var needsNewSimulator = _rippleSimulator == null ||
-                                    !_rippleSimulator.IsAvailable ||
-                                    _appliedRippleWaterSize != _topSurfaceSize ||
-                                    !_appliedQualitySettings.SimulationEquals(qualitySettings) ||
-                                    _appliedRippleMaterialTemplate != materialTemplate;
-            if (!needsNewSimulator)
-            {
-                return;
-            }
-
-            DisposeRippleSimulator();
-            var fallbackShader = Shader.Find("Water25D/Ripple Simulation");
-            if (materialTemplate == null && fallbackShader == null)
-            {
-                if (!_hasLoggedMissingRippleShader)
-                {
-                    Debug.LogWarning("Water25D ripple simulation could not find its package shader. Assign a ripple material template or reimport the package shader.", this);
-                    _hasLoggedMissingRippleShader = true;
-                }
-                return;
-            }
-
-            _rippleSimulator = new CustomRenderTextureRippleSimulator(
-                _runtimeResources,
-                _topSurfaceSize,
-                qualitySettings,
-                materialTemplate);
-            _appliedRippleMaterialTemplate = materialTemplate;
-            _appliedRippleWaterSize = _topSurfaceSize;
-            _appliedQualitySettings = qualitySettings;
-        }
-
-        private Material _appliedRippleMaterialTemplate;
-
-        private void ApplyRendererBindings()
-        {
-            var styleSettings = _styleProfile != null ? _styleProfile.GetSettings() : WaterStyleSettings.Default;
-            styleSettings.Sanitize();
-
-            var topTemplate = _topMaterialTemplate != null ? _topMaterialTemplate : _styleProfile != null ? _styleProfile.TopMaterialTemplate : null;
-            var frontTemplate = _frontMaterialTemplate != null ? _frontMaterialTemplate : _styleProfile != null ? _styleProfile.FrontMaterialTemplate : null;
-            var topShader = Shader.Find("Water25D/Top Surface");
-            var frontShader = Shader.Find("Water25D/Front Surface");
-
-            var topMaterial = _runtimeResources.ConfigureTopSurfaceMaterial(topTemplate, _topMeshRenderer.sharedMaterial, topShader);
-            var frontMaterial = _runtimeResources.ConfigureFrontSurfaceMaterial(frontTemplate, _frontMeshRenderer.sharedMaterial, frontShader);
-            if (topMaterial == null && !_hasLoggedMissingSurfaceShader)
-            {
-                Debug.LogWarning("Water25D has no top material. Assign a template or reimport the package shader.", this);
-                _hasLoggedMissingSurfaceShader = true;
-            }
-
-            _topMeshRenderer.sharedMaterial = topMaterial;
-            _frontMeshRenderer.sharedMaterial = frontMaterial;
-            _topSortingGroup.sortingLayerID = GetSortingLayerId(_topSortingLayerName);
-            _topSortingGroup.sortingOrder = _topSortingOrder;
-            _frontSortingGroup.sortingLayerID = GetSortingLayerId(_frontSortingLayerName);
-            _frontSortingGroup.sortingOrder = _frontSortingOrder;
-
-            if (_materialPropertyBlock == null)
-            {
-                _materialPropertyBlock = new MaterialPropertyBlock();
-            }
-
-            _materialPropertyBlock.Clear();
-            styleSettings.Apply(_materialPropertyBlock);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.WaveBands, GetQualitySettings().AmbientWaveBands);
-            _materialPropertyBlock.SetVector(WaterShaderIds.WaterSize, new Vector4(_topSurfaceSize.x, _topSurfaceSize.y, 0f, 0f));
-            _materialPropertyBlock.SetFloat(WaterShaderIds.WaterMeshDepth, _topSurfaceSize.y);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.FrontDepth, _frontSurfaceDepth);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.Waterline, _waterlineLocalY);
-            var rippleTexture = RippleTexture;
-            if (rippleTexture != null)
-            {
-                _materialPropertyBlock.SetTexture(WaterShaderIds.RippleTexture, rippleTexture);
-                _materialPropertyBlock.SetTexture(WaterShaderIds.RippleSimulationTexture, rippleTexture);
-            }
-            _materialPropertyBlock.SetFloat(WaterShaderIds.RippleEnabled, rippleTexture != null ? 1f : 0f);
-            _materialPropertyBlock.SetMatrix(WaterShaderIds.ReflectionViewProjection, Matrix4x4.identity);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.ReflectionEnabled, 0f);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.ReflectionFallback, _reflectionMode == WaterReflectionMode.Stylized ? 1f : 0f);
-            _materialPropertyBlock.SetFloat(WaterShaderIds.ReflectionStrength, _reflectionStrength);
-            _topMeshRenderer.SetPropertyBlock(_materialPropertyBlock);
-            _frontMeshRenderer.SetPropertyBlock(_materialPropertyBlock);
-        }
-
         private void RegisterReflectionSurface()
         {
-            DisposeReflectionRegistration();
-            if (!Application.isPlaying || _reflectionMode == WaterReflectionMode.Disabled || _topMeshRenderer == null || _reflectionAnchor == null)
-            {
-                return;
-            }
-
-            _reflectionRegistration = WaterReflectionManager.Register(
-                _topMeshRenderer,
-                _reflectionAnchor,
+            _reflection.Configure(
+                _hierarchy.TopMeshRenderer,
+                _hierarchy.ReflectionAnchor,
                 _reflectionCameraSource,
                 _reflectionMode,
                 _reflectionCullingMask,
@@ -573,80 +416,7 @@ namespace Water25D
 
         private void ConfigureEffects()
         {
-            _fxController?.Configure(this, _enableEffects, _splashDefinition, _bubbleDefinition, _maximumFxPoolSize);
-        }
-
-        private void EnsureHierarchy()
-        {
-            _topSurface = EnsureChild(_topSurface, TopSurfaceName);
-            _frontSurface = EnsureChild(_frontSurface, FrontSurfaceName);
-            _surfaceCrossingTrigger = EnsureChild(_surfaceCrossingTrigger, SurfaceCrossingTriggerName);
-            _buoyancyVolume = EnsureChild(_buoyancyVolume, BuoyancyVolumeName);
-            _reflectionAnchor = EnsureChild(_reflectionAnchor, ReflectionAnchorName);
-            _fxRoot = EnsureChild(_fxRoot, FxRootName);
-
-            _topMeshFilter = GetOrAddComponent<MeshFilter>(_topSurface.gameObject);
-            _topMeshRenderer = GetOrAddComponent<MeshRenderer>(_topSurface.gameObject);
-            _topSortingGroup = GetOrAddComponent<SortingGroup>(_topSurface.gameObject);
-            _frontMeshFilter = GetOrAddComponent<MeshFilter>(_frontSurface.gameObject);
-            _frontMeshRenderer = GetOrAddComponent<MeshRenderer>(_frontSurface.gameObject);
-            _frontSortingGroup = GetOrAddComponent<SortingGroup>(_frontSurface.gameObject);
-
-            _surfaceCollider = GetOrAddComponent<BoxCollider2D>(_surfaceCrossingTrigger.gameObject);
-            _surfaceInteraction = GetOrAddComponent<WaterSurfaceInteraction2D>(_surfaceCrossingTrigger.gameObject);
-            _buoyancyCollider = GetOrAddComponent<BoxCollider2D>(_buoyancyVolume.gameObject);
-            _physicsVolume = GetOrAddComponent<WaterPhysicsVolume2D>(_buoyancyVolume.gameObject);
-            _fxController = GetOrAddComponent<WaterFXController>(_fxRoot.gameObject);
-            _buoyancyVolume.gameObject.TryGetComponent(out _buoyancyEffector);
-
-            if (_synchronizeGeneratedChildLayers)
-            {
-                var layer = gameObject.layer;
-                _topSurface.gameObject.layer = layer;
-                _frontSurface.gameObject.layer = layer;
-                _surfaceCrossingTrigger.gameObject.layer = layer;
-                _buoyancyVolume.gameObject.layer = layer;
-                _reflectionAnchor.gameObject.layer = layer;
-                _fxRoot.gameObject.layer = layer;
-            }
-        }
-
-        private Transform EnsureChild(Transform serializedChild, string childName)
-        {
-            if (serializedChild != null && serializedChild.parent == transform)
-            {
-                return serializedChild;
-            }
-
-            for (var i = 0; i < transform.childCount; i++)
-            {
-                var child = transform.GetChild(i);
-                if (child.name == childName)
-                {
-                    return child;
-                }
-            }
-
-            var childObject = new GameObject(childName);
-            childObject.transform.SetParent(transform, false);
-            return childObject.transform;
-        }
-
-        private static T GetOrAddComponent<T>(GameObject gameObject) where T : Component
-        {
-            if (!gameObject.TryGetComponent<T>(out var component))
-            {
-                component = gameObject.AddComponent<T>();
-            }
-
-            return component;
-        }
-
-        private static int GetSortingLayerId(string sortingLayerName)
-        {
-            var requestedName = string.IsNullOrEmpty(sortingLayerName) ? "Default" : sortingLayerName;
-            var requestedId = SortingLayer.NameToID(requestedName);
-            return requestedId >= 0 ? requestedId : SortingLayer.NameToID("Default");
+            _hierarchy.FxController?.Configure(this, _enableEffects, _splashDefinition, _bubbleDefinition, _maximumFxPoolSize);
         }
 
         private WaterQualitySettings GetQualitySettings()
@@ -674,59 +444,71 @@ namespace Water25D
             _reflectionStrength = Mathf.Clamp01(_reflectionStrength);
         }
 
-        private void DisposeRippleSimulator()
+        private void EnsureModules()
         {
-            if (_rippleSimulator == null)
+            if (_hierarchy == null)
             {
-                return;
+                _hierarchy = new WaterHierarchyModule();
             }
 
-            _rippleSimulator.Dispose();
-            _rippleSimulator = null;
+            if (_geometry == null)
+            {
+                _geometry = new WaterGeometryModule();
+            }
+
+            if (_rendering == null)
+            {
+                _rendering = new WaterRenderingModule();
+            }
+
+            if (_physics == null)
+            {
+                _physics = new WaterPhysicsModule();
+            }
+
+            if (_ripple == null)
+            {
+                _ripple = new WaterRippleModule();
+            }
+
+            if (_reflection == null)
+            {
+                _reflection = new WaterReflectionModule();
+            }
         }
 
         private void DisposeRuntimeResources()
         {
-            DisposeReflectionRegistration();
-            _fxController?.DisposeRuntimeResources();
-            DisposeRippleSimulator();
+            _reflection?.Dispose();
+            _hierarchy?.FxController?.DisposeRuntimeResources();
+            _ripple?.Dispose();
             if (_runtimeResources == null)
             {
+                _geometry?.Reset();
                 return;
             }
 
-            if (_topMeshFilter != null)
+            if (_hierarchy?.TopMeshFilter != null)
             {
-                _topMeshFilter.sharedMesh = null;
-                if (_topMeshRenderer != null && _runtimeResources.OwnsTopSurfaceMaterial && _topMeshRenderer.sharedMaterial == _runtimeResources.TopSurfaceMaterial)
+                _hierarchy.TopMeshFilter.sharedMesh = null;
+                if (_hierarchy.TopMeshRenderer != null && _runtimeResources.OwnsTopSurfaceMaterial && _hierarchy.TopMeshRenderer.sharedMaterial == _runtimeResources.TopSurfaceMaterial)
                 {
-                    _topMeshRenderer.sharedMaterial = null;
+                    _hierarchy.TopMeshRenderer.sharedMaterial = null;
                 }
             }
 
-            if (_frontMeshFilter != null)
+            if (_hierarchy?.FrontMeshFilter != null)
             {
-                _frontMeshFilter.sharedMesh = null;
-                if (_frontMeshRenderer != null && _runtimeResources.OwnsFrontSurfaceMaterial && _frontMeshRenderer.sharedMaterial == _runtimeResources.FrontSurfaceMaterial)
+                _hierarchy.FrontMeshFilter.sharedMesh = null;
+                if (_hierarchy.FrontMeshRenderer != null && _runtimeResources.OwnsFrontSurfaceMaterial && _hierarchy.FrontMeshRenderer.sharedMaterial == _runtimeResources.FrontSurfaceMaterial)
                 {
-                    _frontMeshRenderer.sharedMaterial = null;
+                    _hierarchy.FrontMeshRenderer.sharedMaterial = null;
                 }
             }
 
             _runtimeResources.Dispose();
             _runtimeResources = null;
-            _geometryApplied = false;
-        }
-
-        private void DisposeReflectionRegistration()
-        {
-            if (_reflectionRegistration == null)
-            {
-                return;
-            }
-
-            _reflectionRegistration.Dispose();
-            _reflectionRegistration = null;
+            _geometry?.Reset();
         }
     }
 }

@@ -10,7 +10,8 @@ The package-owned runtime and editor code only depends on Unity runtime/editor A
 - Confirm the destination project has the 2D physics components used by the package, including `BuoyancyEffector2D`.
 - Create or map project layers and sorting layers as needed for the destination game. The package does not silently add or rename project-level layers.
 - Configure any required URP renderer features or Camera Sorting Layer Texture settings in the destination project. These are project policy, not serialized package dependencies.
-- Import the package in a clean destination project and create a controller through the package menu. Confirm that all generated children, fallback shaders, CRT resources, and physics volumes are created without references outside `Assets/Water25D/`.
+- Import the package in a clean destination project and create a controller through the package menu. Confirm that the five default assets are assigned, all generated children and physics volumes are created without references outside `Assets/Water25D/`, and the top/front renderer material slots contain persistent package materials.
+- Save and reopen a scene or prefab containing the controller. Confirm that the surface materials and profiles remain assigned and that preview meshes regenerate without becoming serialized scene mesh data.
 - Run the package EditMode and PlayMode tests in the destination project before accepting a migration.
 
 ## Dependency audit

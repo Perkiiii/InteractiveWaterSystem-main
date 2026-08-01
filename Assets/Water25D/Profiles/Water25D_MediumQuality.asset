@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36efe2b54a6baa049a38a22cdec75d10, type: 3}
+  m_Name: Water25D_MediumQuality
+  m_EditorClassIdentifier: Water25D.Runtime::Water25D.WaterQualityProfile
+  _rippleTexelsPerUnit: 16
+  _minimumRippleResolution: {x: 64, y: 32}
+  _maximumRippleResolution: {x: 512, y: 192}
+  _simulationFrequency: 30
+  _propagationSubsteps: 2
+  _maximumCatchUpSubsteps: 2
+  _maximumImpactsPerStep: 32
+  _maximumQueuedImpacts: 128
+  _dampingPerSecond: 0.65
+  _waveSpeed: 5
+  _impactRadius: 0.22
+  _idleTimeout: 2
+  _ambientWaveBands: 3
+  _topVerticesPerUnit: 8

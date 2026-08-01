@@ -10,7 +10,9 @@ namespace Water25D.Editor
         {
             var gameObject = new GameObject("Water25D");
             Undo.RegisterCreatedObjectUndo(gameObject, "Create Water 2.5D");
-            gameObject.AddComponent<Water25DController>();
+            var controller = gameObject.AddComponent<Water25DController>();
+            Water25DEditorDefaults.AssignDefaults(controller);
+            controller.RepairHierarchyAndRebuild();
             Selection.activeGameObject = gameObject;
             EditorGUIUtility.PingObject(gameObject);
         }

@@ -32,6 +32,10 @@ namespace Water25D
         {
             ThrowIfDisposed();
             DestroyOwnedObject(_topMesh);
+            if (mesh != null)
+            {
+                mesh.hideFlags = HideFlags.HideAndDontSave;
+            }
             _topMesh = mesh;
         }
 
@@ -39,6 +43,10 @@ namespace Water25D
         {
             ThrowIfDisposed();
             DestroyOwnedObject(_frontMesh);
+            if (mesh != null)
+            {
+                mesh.hideFlags = HideFlags.HideAndDontSave;
+            }
             _frontMesh = mesh;
         }
 

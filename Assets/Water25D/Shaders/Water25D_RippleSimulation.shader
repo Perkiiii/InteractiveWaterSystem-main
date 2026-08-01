@@ -41,7 +41,8 @@ Shader "Water25D/Ripple Simulation"
         float2 radius = max(_ImpactRadius.xy, float2(0.00001, 0.00001));
         float2 offset = (i.globalTexcoord - _ImpactCenter.xy) / radius;
         float falloff = saturate(1.0 - dot(offset, offset));
-        return float4(sign * _ImpactHeight * falloff, 0.0, 0.0, 0.0);
+        float4 state = tex2D(_SelfTexture2D, i.globalTexcoord);
+        return float4(state.r + sign * _ImpactHeight * falloff, state.g, 0.0, 0.0);
     }
 
     float4 frag_up_impact(v2f_customrendertexture i) : SV_Target

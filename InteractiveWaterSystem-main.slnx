@@ -1,4 +1,9 @@
 ﻿<Solution>
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Water25D.Tests.EditMode.csproj" />
+  <Project Path="Water25D.Editor.csproj" />
+  <Project Path="Water25D.Runtime.csproj" />
+  <Project Path="Water25D.Benchmark.csproj" />
+  <Project Path="Water25D.Tests.PlayMode.csproj" />
 </Solution>

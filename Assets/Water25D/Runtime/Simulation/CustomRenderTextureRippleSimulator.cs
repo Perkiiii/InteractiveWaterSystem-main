@@ -19,7 +19,7 @@ namespace Water25D
         private readonly WaterQualitySettings _settings;
         private readonly Vector2 _waterSize;
         private readonly WaterRippleImpact[] _impactQueue;
-        private readonly CustomRenderTextureUpdateZone[] _updateZones = new CustomRenderTextureUpdateZone[2];
+        private readonly CustomRenderTextureUpdateZone[] _updateZones = new CustomRenderTextureUpdateZone[1];
         private readonly CustomRenderTexture _texture;
         private readonly Material _material;
 
@@ -29,6 +29,13 @@ namespace Water25D
         private float _timeAccumulator;
         private float _idleTime;
         private bool _disposed;
+
+        /// <summary>
+        /// Diagnostic counters used by benchmarks and EditMode scheduling tests. They count
+        /// logical CRT updates, not GPU milliseconds.
+        /// </summary>
+        public int ImpactInjectionUpdateCount { get; private set; }
+        public int FullSurfacePropagationUpdateCount { get; private set; }
 
         public bool IsAvailable => !_disposed && _texture != null && _material != null;
         public Texture HeightTexture => IsAvailable ? _texture : null;
@@ -172,16 +179,15 @@ namespace Water25D
             _material.SetFloat(DampingId, damping);
 
             var impactsThisStep = Mathf.Min(_queueCount, _settings.MaximumImpactsPerStep);
-            if (impactsThisStep == 0)
-            {
-                ApplyPropagation();
-                return;
-            }
-
             for (var i = 0; i < impactsThisStep; i++)
             {
                 ApplyImpact(DequeueImpact());
             }
+
+            // Impact zones are injected independently, so each impact only touches its
+            // bounded area. The full-surface propagation is performed once after all
+            // pending impacts have been injected.
+            ApplyPropagation();
         }
 
         private void ApplyPropagation()
@@ -194,18 +200,11 @@ namespace Water25D
                 updateZoneCenter = new Vector3(0.5f, 0.5f, 0f),
                 updateZoneSize = new Vector3(1f, 1f, 0f)
             };
-            _updateZones[1] = new CustomRenderTextureUpdateZone
-            {
-                needSwap = true,
-                passIndex = 1,
-                rotation = 0f,
-                updateZoneCenter = new Vector3(0.5f, 0.5f, 0f),
-                updateZoneSize = Vector3.zero
-            };
             _texture.ClearUpdateZones();
             _texture.SetUpdateZones(_updateZones);
             _texture.shaderPass = 0;
             _texture.Update(_settings.PropagationSubsteps);
+            FullSurfacePropagationUpdateCount++;
         }
 
         private void ApplyImpact(WaterRippleImpact impact)
@@ -219,14 +218,6 @@ namespace Water25D
             _updateZones[0] = new CustomRenderTextureUpdateZone
             {
                 needSwap = true,
-                passIndex = 0,
-                rotation = 0f,
-                updateZoneCenter = new Vector3(0.5f, 0.5f, 0f),
-                updateZoneSize = new Vector3(1f, 1f, 0f)
-            };
-            _updateZones[1] = new CustomRenderTextureUpdateZone
-            {
-                needSwap = true,
                 passIndex = impact.InitialUp ? 1 : 2,
                 rotation = 0f,
                 updateZoneCenter = new Vector3(impact.CenterUV.x, impact.CenterUV.y, 0f),
@@ -235,7 +226,8 @@ namespace Water25D
             _texture.ClearUpdateZones();
             _texture.SetUpdateZones(_updateZones);
             _texture.shaderPass = 0;
-            _texture.Update(_settings.PropagationSubsteps);
+            _texture.Update(1);
+            ImpactInjectionUpdateCount++;
         }
 
         private WaterRippleImpact DequeueImpact()
