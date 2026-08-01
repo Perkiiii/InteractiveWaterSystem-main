@@ -25,6 +25,7 @@ namespace Water25D
             float frontSurfaceDepth,
             float waterlineLocalY,
             WaterQualitySettings qualitySettings,
+            WaterSurfaceMode surfaceMode,
             Texture rippleTexture,
             string topSortingLayerName,
             int topSortingOrder,
@@ -63,6 +64,7 @@ namespace Water25D
             _propertyBlock.SetFloat(WaterShaderIds.WaterMeshDepth, topSurfaceSize.y);
             _propertyBlock.SetFloat(WaterShaderIds.FrontDepth, frontSurfaceDepth);
             _propertyBlock.SetFloat(WaterShaderIds.Waterline, waterlineLocalY);
+            _propertyBlock.SetFloat(WaterShaderIds.SurfaceMode, (float)surfaceMode);
             if (rippleTexture != null)
             {
                 _propertyBlock.SetTexture(WaterShaderIds.RippleTexture, rippleTexture);

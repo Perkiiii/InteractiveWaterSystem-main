@@ -58,6 +58,10 @@ namespace Water25D.Editor
             if (changed)
             {
                 Water25DInspectorUtility.MarkControllerPropertiesChanged(serializedObject);
+                for (var i = 0; i < targets.Length; i++)
+                {
+                    (targets[i] as Water25DController)?.RefreshAuthoringPreview();
+                }
                 RefreshProfileSerializedObjects();
                 RefreshValidation();
                 SceneView.RepaintAll();
@@ -83,6 +87,7 @@ namespace Water25D.Editor
             var open = BeginTopLevelSection("Basic", "Basic");
             if (open)
             {
+                Property("_surfaceMode", "Surface Mode", "Existing serialized controllers remain SimulatedRipples. New controllers use FlatStylized; flat procedural interactions are not implemented in this slice.");
                 var size = serializedObject.FindProperty("_topSurfaceSize");
                 if (size != null)
                 {
@@ -194,24 +199,33 @@ namespace Water25D.Editor
                 return;
             }
 
-            Property("_enableRippleSimulation", "Ripples Enabled", "Allocate and update the instance-owned CRT ripple state in Play Mode.");
-            Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
-            Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
-            Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
-
-            var qualityProfile = GetQualityProfile();
-            if (qualityProfile != null && _qualityProfileSerializedObject != null)
+            var flatMode = GetSurfaceMode() == WaterSurfaceMode.FlatStylized;
+            if (flatMode)
             {
-                DrawSharedProfileNotice(qualityProfile, false);
-                DrawNestedQualitySection(_qualityProfileSerializedObject, "Resolution", "Rendering.ContactRipples.Resolution", WaterQualityProfileEditor.DrawRippleResolutionFields);
-                DrawNestedQualitySection(_qualityProfileSerializedObject, "Scheduling", "Rendering.ContactRipples.Scheduling", WaterQualityProfileEditor.DrawSchedulingFields);
-                DrawNestedQualitySection(_qualityProfileSerializedObject, "Wave Behaviour", "Rendering.ContactRipples.WaveBehaviour", WaterQualityProfileEditor.DrawWaveBehaviourFields);
+                EditorGUILayout.HelpBox("FlatStylized does not allocate or update the CRT. Procedural rings, foam, wakes and splashes are not implemented in this slice.", MessageType.Info);
             }
 
-            var styleProfile = GetStyleProfile();
-            if (styleProfile != null && _styleProfileSerializedObject != null)
+            using (new EditorGUI.DisabledScope(flatMode))
             {
-                WaterStyleProfileEditor.DrawRippleFields(_styleProfileSerializedObject);
+                Property("_enableRippleSimulation", "Ripples Enabled", "Allocate and update the instance-owned CRT ripple state in Play Mode.");
+                Property("_impactSpeedForFullStrength", "Full-strength Impact Speed", "Velocity magnitude in world units per second that reaches full impact strength.");
+                Property("_minimumImpactStrength", "Minimum Impact Strength", "Floor applied to non-zero impact strength before the multiplier.");
+                Property("_impactStrengthMultiplier", "Impact Strength Multiplier", "Scales calculated impact strength before it is clamped to 0–1.");
+
+                var qualityProfile = GetQualityProfile();
+                if (qualityProfile != null && _qualityProfileSerializedObject != null)
+                {
+                    DrawSharedProfileNotice(qualityProfile, false);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Resolution", "Rendering.ContactRipples.Resolution", WaterQualityProfileEditor.DrawRippleResolutionFields);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Scheduling", "Rendering.ContactRipples.Scheduling", WaterQualityProfileEditor.DrawSchedulingFields);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Wave Behaviour", "Rendering.ContactRipples.WaveBehaviour", WaterQualityProfileEditor.DrawWaveBehaviourFields);
+                }
+
+                var styleProfile = GetStyleProfile();
+                if (styleProfile != null && _styleProfileSerializedObject != null)
+                {
+                    WaterStyleProfileEditor.DrawRippleFields(_styleProfileSerializedObject);
+                }
             }
         }
 
@@ -399,6 +413,8 @@ namespace Water25D.Editor
 
             EditorGUILayout.LabelField("Performance Estimates", EditorStyles.boldLabel);
             var metrics = Water25DInspectorUtility.CalculateMetrics(controller);
+            Metric("Surface Mode", GetSurfaceMode().ToString());
+            Metric("Ripple Simulation", GetSurfaceMode() == WaterSurfaceMode.SimulatedRipples ? "Active in Play Mode" : "Inactive (FlatStylized)");
             Metric("Top Mesh Vertices", metrics.TopVertexCount.x * metrics.TopVertexCount.y);
             Metric("Top Mesh Triangles", metrics.TopTriangleCount);
             Metric("Front Mesh Vertices", metrics.FrontVertexCount);
@@ -451,7 +467,7 @@ namespace Water25D.Editor
 
             if (Application.isPlaying && controller != null)
             {
-                using (new EditorGUI.DisabledScope(!GetBool("_enableRippleSimulation", true)))
+                using (new EditorGUI.DisabledScope(!GetBool("_enableRippleSimulation", true) || GetSurfaceMode() != WaterSurfaceMode.SimulatedRipples))
                 {
                     if (GUILayout.Button(new GUIContent("Test Ripple at Center", "Queue a test impact at the centre of the water in Play Mode."), Water25DInspectorStyles.SmallButton))
                     {
@@ -873,6 +889,12 @@ namespace Water25D.Editor
         {
             var property = serializedObject.FindProperty("_reflectionMode");
             return property != null ? (WaterReflectionMode)property.enumValueIndex : WaterReflectionMode.Stylized;
+        }
+
+        private WaterSurfaceMode GetSurfaceMode()
+        {
+            var property = serializedObject.FindProperty("_surfaceMode");
+            return property != null ? (WaterSurfaceMode)property.enumValueIndex : WaterSurfaceMode.SimulatedRipples;
         }
 
         private Camera GetReflectionCamera()

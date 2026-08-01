@@ -167,7 +167,17 @@ namespace Water25D.Tests
                 var metrics = Water25DInspectorUtility.CalculateMetrics(root);
                 var settings = root.QualityProfile.GetSettings();
                 Assert.AreEqual(settings.CalculateRippleResolution(root.TopSurfaceSize), metrics.RippleResolution);
-                Assert.AreEqual(WaterMeshBuilder.CalculateTopVertexCount(root.TopSurfaceSize, settings.TopVerticesPerUnit), metrics.TopVertexCount);
+                if (root.SurfaceMode == WaterSurfaceMode.FlatStylized)
+                {
+                    Assert.AreEqual(new Vector2Int(2, 2), metrics.TopVertexCount);
+                    Assert.AreEqual(2, metrics.TopTriangleCount);
+                    Assert.AreEqual(4, metrics.FrontVertexCount);
+                    Assert.AreEqual(2, metrics.FrontTriangleCount);
+                }
+                else
+                {
+                    Assert.AreEqual(WaterMeshBuilder.CalculateTopVertexCount(root.TopSurfaceSize, settings.TopVerticesPerUnit), metrics.TopVertexCount);
+                }
                 Assert.Greater(metrics.RippleStateBytes, 0);
                 Assert.Greater(metrics.PropagatedCellsPerSecond, 0d);
             }

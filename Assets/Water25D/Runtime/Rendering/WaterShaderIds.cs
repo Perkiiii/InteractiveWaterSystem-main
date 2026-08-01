@@ -19,6 +19,7 @@ namespace Water25D
         public static readonly int RippleSimulationTexture = Shader.PropertyToID("_RippleSimulationTexture");
         public static readonly int RippleEnabled = Shader.PropertyToID("_RippleEnabled");
         public static readonly int RippleAmplitude = Shader.PropertyToID("_RippleAmplitude");
+        public static readonly int SurfaceMode = Shader.PropertyToID("_SurfaceMode");
         public static readonly int RippleScale = Shader.PropertyToID("_RippleScale");
         public static readonly int RippleHeightOffset = Shader.PropertyToID("_RippleHeightOffset");
         public static readonly int WaveAmplitude = Shader.PropertyToID("_WaveAmplitude");

@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Water25D.Rendering;
 
 namespace Water25D.Editor
 {
@@ -28,6 +29,11 @@ namespace Water25D.Editor
 
         internal static bool AssignDefaults(Water25DController controller)
         {
+            return AssignDefaults(controller, false);
+        }
+
+        internal static bool AssignDefaults(Water25DController controller, bool isNewObject)
+        {
             if (controller == null || Application.isPlaying)
             {
                 return false;
@@ -51,6 +57,10 @@ namespace Water25D.Editor
             changed |= AssignIfMissing(serializedObject, "_rippleSimulationMaterialTemplate", rippleMaterial);
             changed |= AssignIfMissing(serializedObject, "_styleProfile", styleProfile);
             changed |= AssignIfMissing(serializedObject, "_qualityProfile", qualityProfile);
+            if (isNewObject)
+            {
+                changed |= AssignSurfaceMode(serializedObject, WaterSurfaceMode.FlatStylized);
+            }
             if (changed)
             {
                 serializedObject.ApplyModifiedPropertiesWithoutUndo();
@@ -75,6 +85,18 @@ namespace Water25D.Editor
             }
 
             property.objectReferenceValue = value;
+            return true;
+        }
+
+        private static bool AssignSurfaceMode(SerializedObject serializedObject, WaterSurfaceMode surfaceMode)
+        {
+            var property = serializedObject.FindProperty("_surfaceMode");
+            if (property == null || property.enumValueIndex == (int)surfaceMode)
+            {
+                return false;
+            }
+
+            property.enumValueIndex = (int)surfaceMode;
             return true;
         }
 

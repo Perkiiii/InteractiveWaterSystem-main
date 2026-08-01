@@ -78,6 +78,42 @@ namespace Water25D
             return mesh;
         }
 
+        /// <summary>
+        /// Builds the intentionally minimal top surface used by FlatStylized.
+        /// The vertex and UV order matches the corners of the existing tessellated
+        /// builder so mode changes do not change the authored mapping convention.
+        /// </summary>
+        public static Mesh BuildFlatTopMesh(Vector2 topSurfaceSize, string meshName)
+        {
+            var width = Mathf.Max(0.01f, topSurfaceSize.x);
+            var depth = Mathf.Max(0.01f, topSurfaceSize.y);
+            var mesh = new Mesh
+            {
+                name = string.IsNullOrEmpty(meshName) ? "Water25D Flat Top Surface" : meshName
+            };
+
+            mesh.vertices = new[]
+            {
+                new Vector3(0f, 0f, 0f),
+                new Vector3(width, 0f, 0f),
+                new Vector3(0f, 0f, depth),
+                new Vector3(width, 0f, depth)
+            };
+            mesh.uv = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(1f, 0f),
+                new Vector2(0f, 1f),
+                new Vector2(1f, 1f)
+            };
+            // The order produces upward-facing normals, matching BuildTopMesh.
+            mesh.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mesh.MarkDynamic();
+            return mesh;
+        }
+
         public static Mesh BuildFrontMesh(Vector2 topSurfaceSize, float frontSurfaceDepth, int horizontalVertexCount, string meshName)
         {
             var width = Mathf.Max(0.01f, topSurfaceSize.x);

@@ -6,6 +6,7 @@ Shader "Water25D/Front Surface"
         _FrontDeepColor("Deep Color", Color) = (0.025, 0.1, 0.18, 0.94)
         _FoamColor("Foam Color", Color) = (0.78, 0.95, 1, 0.8)
         _FrontDepth("Front Depth", Float) = 10
+        _SurfaceMode("Surface Mode", Float) = 0
         _WaveAmplitude("Ambient Wave Amplitude", Float) = 0.06
         _WaveLength("Ambient Wave Length", Float) = 3.5
         _WaveSpeed("Ambient Wave Speed", Float) = 0.8
@@ -24,6 +25,7 @@ Shader "Water25D/Front Surface"
         }
         Blend SrcAlpha OneMinusSrcAlpha
         ZWrite Off
+        ZTest LEqual
         Cull Off
 
         HLSLINCLUDE
@@ -35,6 +37,7 @@ Shader "Water25D/Front Surface"
             half4 _FrontDeepColor;
             half4 _FoamColor;
             float _FrontDepth;
+            float _SurfaceMode;
             float _WaveAmplitude;
             float _WaveLength;
             float _WaveSpeed;
@@ -62,16 +65,20 @@ Shader "Water25D/Front Surface"
             UNITY_SETUP_INSTANCE_ID(input);
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
             float3 positionOS = input.positionOS.xyz;
-            float3 worldPosition = TransformObjectToWorld(positionOS);
-            float ambient = EvaluateWaterAmbientWaves(
-                worldPosition.xz,
-                _WaveDirection.xy,
-                _WaveLength,
-                _WaveAmplitude,
-                _WaveSpeed,
-                _Time.y,
-                _WaveBands);
-            positionOS.y += ambient * input.uv.y;
+            if (_SurfaceMode < 0.5)
+            {
+                float3 worldPosition = TransformObjectToWorld(positionOS);
+                float ambient = EvaluateWaterAmbientWaves(
+                    worldPosition.xz,
+                    _WaveDirection.xy,
+                    _WaveLength,
+                    _WaveAmplitude,
+                    _WaveSpeed,
+                    _Time.y,
+                    _WaveBands);
+                positionOS.y += ambient * input.uv.y;
+            }
+
             output.positionCS = GetVertexPositionInputs(positionOS).positionCS;
             output.uv = input.uv;
             return output;

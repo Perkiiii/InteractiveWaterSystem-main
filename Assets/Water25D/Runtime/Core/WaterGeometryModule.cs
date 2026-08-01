@@ -1,4 +1,5 @@
 using UnityEngine;
+using Water25D.Rendering;
 
 namespace Water25D
 {
@@ -11,41 +12,60 @@ namespace Water25D
         private bool _applied;
         private Vector2 _appliedTopSurfaceSize;
         private float _appliedFrontSurfaceDepth;
-        private float _appliedWaterlineLocalY;
         private float _appliedTopVerticesPerUnit;
+        private WaterSurfaceMode _appliedSurfaceMode;
 
         public void ApplyIfNeeded(
             Vector2 topSurfaceSize,
             float frontSurfaceDepth,
-            float waterlineLocalY,
             WaterQualitySettings qualitySettings,
+            WaterSurfaceMode surfaceMode,
             WaterRuntimeResources resources,
             MeshFilter topMeshFilter,
             MeshFilter frontMeshFilter)
         {
-            var geometryChanged = !_applied ||
-                                  _appliedTopSurfaceSize != topSurfaceSize ||
-                                  !Mathf.Approximately(_appliedFrontSurfaceDepth, frontSurfaceDepth) ||
-                                  !Mathf.Approximately(_appliedWaterlineLocalY, waterlineLocalY) ||
-                                  !Mathf.Approximately(_appliedTopVerticesPerUnit, qualitySettings.TopVerticesPerUnit);
-            if (!geometryChanged)
+            var modeChanged = !_applied || _appliedSurfaceMode != surfaceMode;
+            var topGeometryChanged = modeChanged ||
+                                     _appliedTopSurfaceSize != topSurfaceSize ||
+                                     (surfaceMode == WaterSurfaceMode.SimulatedRipples &&
+                                      !Mathf.Approximately(_appliedTopVerticesPerUnit, qualitySettings.TopVerticesPerUnit));
+            var frontGeometryChanged = modeChanged ||
+                                       !_applied ||
+                                       !Mathf.Approximately(_appliedTopSurfaceSize.x, topSurfaceSize.x) ||
+                                       !Mathf.Approximately(_appliedFrontSurfaceDepth, frontSurfaceDepth) ||
+                                       (surfaceMode == WaterSurfaceMode.SimulatedRipples &&
+                                        !Mathf.Approximately(_appliedTopVerticesPerUnit, qualitySettings.TopVerticesPerUnit));
+            if (!topGeometryChanged && !frontGeometryChanged)
             {
                 return;
             }
 
-            topMeshFilter.sharedMesh = null;
-            frontMeshFilter.sharedMesh = null;
-
             var vertexCount = WaterMeshBuilder.CalculateTopVertexCount(topSurfaceSize, qualitySettings.TopVerticesPerUnit);
-            resources.ReplaceTopMesh(WaterMeshBuilder.BuildTopMesh(topSurfaceSize, vertexCount, "Water25D Top Mesh"));
-            resources.ReplaceFrontMesh(WaterMeshBuilder.BuildFrontMesh(topSurfaceSize, frontSurfaceDepth, vertexCount.x, "Water25D Front Mesh"));
-            topMeshFilter.sharedMesh = resources.TopMesh;
-            frontMeshFilter.sharedMesh = resources.FrontMesh;
+            if (topGeometryChanged)
+            {
+                topMeshFilter.sharedMesh = null;
+                resources.ReplaceTopMesh(surfaceMode == WaterSurfaceMode.FlatStylized
+                    ? WaterMeshBuilder.BuildFlatTopMesh(topSurfaceSize, "Water25D Flat Top Mesh")
+                    : WaterMeshBuilder.BuildTopMesh(topSurfaceSize, vertexCount, "Water25D Top Mesh"));
+                topMeshFilter.sharedMesh = resources.TopMesh;
+            }
+
+            if (frontGeometryChanged)
+            {
+                frontMeshFilter.sharedMesh = null;
+                var frontVertexCount = surfaceMode == WaterSurfaceMode.FlatStylized ? 2 : vertexCount.x;
+                resources.ReplaceFrontMesh(WaterMeshBuilder.BuildFrontMesh(
+                    topSurfaceSize,
+                    frontSurfaceDepth,
+                    frontVertexCount,
+                    surfaceMode == WaterSurfaceMode.FlatStylized ? "Water25D Flat Front Mesh" : "Water25D Front Mesh"));
+                frontMeshFilter.sharedMesh = resources.FrontMesh;
+            }
 
             _appliedTopSurfaceSize = topSurfaceSize;
             _appliedFrontSurfaceDepth = frontSurfaceDepth;
-            _appliedWaterlineLocalY = waterlineLocalY;
             _appliedTopVerticesPerUnit = qualitySettings.TopVerticesPerUnit;
+            _appliedSurfaceMode = surfaceMode;
             _applied = true;
         }
 

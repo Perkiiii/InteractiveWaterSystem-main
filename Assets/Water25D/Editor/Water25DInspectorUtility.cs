@@ -5,6 +5,7 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using Water25D.FX;
+using Water25D.Rendering;
 
 namespace Water25D.Editor
 {
@@ -369,7 +370,10 @@ namespace Water25D.Editor
                 ? controller.QualityProfile.GetSettings()
                 : WaterQualitySettings.Default;
             var size = controller != null ? controller.TopSurfaceSize : new Vector2(0.01f, 0.01f);
-            var topVertexCount = WaterMeshBuilder.CalculateTopVertexCount(size, settings.TopVerticesPerUnit);
+            var flatStylized = controller != null && controller.SurfaceMode == WaterSurfaceMode.FlatStylized;
+            var topVertexCount = flatStylized
+                ? new Vector2Int(2, 2)
+                : WaterMeshBuilder.CalculateTopVertexCount(size, settings.TopVerticesPerUnit);
             var rippleResolution = settings.CalculateRippleResolution(size);
             var usesRgHalf = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGHalf);
             var bytesPerTexel = usesRgHalf ? 4L : 8L;
@@ -378,9 +382,9 @@ namespace Water25D.Editor
             return new Water25DPerformanceMetrics
             {
                 TopVertexCount = topVertexCount,
-                TopTriangleCount = Mathf.Max(0, (topVertexCount.x - 1) * (topVertexCount.y - 1) * 2),
-                FrontVertexCount = topVertexCount.x * 2,
-                FrontTriangleCount = Mathf.Max(0, (topVertexCount.x - 1) * 2),
+                TopTriangleCount = flatStylized ? 2 : Mathf.Max(0, (topVertexCount.x - 1) * (topVertexCount.y - 1) * 2),
+                FrontVertexCount = flatStylized ? 4 : topVertexCount.x * 2,
+                FrontTriangleCount = flatStylized ? 2 : Mathf.Max(0, (topVertexCount.x - 1) * 2),
                 RippleResolution = rippleResolution,
                 RippleStateBytes = stateBytes,
                 UsesRgHalf = usesRgHalf,

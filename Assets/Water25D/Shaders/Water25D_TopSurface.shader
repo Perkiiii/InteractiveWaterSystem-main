@@ -7,6 +7,7 @@ Shader "Water25D/Top Surface"
         _RippleTexture("Ripple Texture", 2D) = "black" {}
         _RippleEnabled("Ripple Enabled", Float) = 0
         _RippleAmplitude("Ripple Amplitude", Float) = 0.18
+        _SurfaceMode("Surface Mode", Float) = 0
         _WaveAmplitude("Ambient Wave Amplitude", Float) = 0.06
         _WaveLength("Ambient Wave Length", Float) = 3.5
         _WaveSpeed("Ambient Wave Speed", Float) = 0.8
@@ -29,6 +30,7 @@ Shader "Water25D/Top Surface"
         }
         Blend SrcAlpha OneMinusSrcAlpha
         ZWrite Off
+        ZTest LEqual
         Cull Off
 
         HLSLINCLUDE
@@ -45,6 +47,7 @@ Shader "Water25D/Top Surface"
             half4 _FoamColor;
             float _RippleEnabled;
             float _RippleAmplitude;
+            float _SurfaceMode;
             float _WaveAmplitude;
             float _WaveLength;
             float _WaveSpeed;
@@ -78,22 +81,26 @@ Shader "Water25D/Top Surface"
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
             float3 positionOS = input.positionOS.xyz;
-            float3 worldPosition = TransformObjectToWorld(positionOS);
-            float ambient = EvaluateWaterAmbientWaves(
-                worldPosition.xz,
-                _WaveDirection.xy,
-                _WaveLength,
-                _WaveAmplitude,
-                _WaveSpeed,
-                _Time.y,
-                _WaveBands);
-            float ripple = 0.0;
-            if (_RippleEnabled > 0.5)
+            if (_SurfaceMode < 0.5)
             {
-                ripple = SAMPLE_TEXTURE2D_LOD(_RippleTexture, sampler_RippleTexture, input.uv, 0).r * _RippleAmplitude;
+                float3 worldPosition = TransformObjectToWorld(positionOS);
+                float ambient = EvaluateWaterAmbientWaves(
+                    worldPosition.xz,
+                    _WaveDirection.xy,
+                    _WaveLength,
+                    _WaveAmplitude,
+                    _WaveSpeed,
+                    _Time.y,
+                    _WaveBands);
+                float ripple = 0.0;
+                if (_RippleEnabled > 0.5)
+                {
+                    ripple = SAMPLE_TEXTURE2D_LOD(_RippleTexture, sampler_RippleTexture, input.uv, 0).r * _RippleAmplitude;
+                }
+
+                positionOS.y += ambient + ripple;
             }
 
-            positionOS.y += ambient + ripple;
             output.positionCS = GetVertexPositionInputs(positionOS).positionCS;
             output.uv = input.uv;
             output.worldPos = TransformObjectToWorld(positionOS);

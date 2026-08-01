@@ -24,6 +24,9 @@ namespace Water25D
         [Range(0f, 1f)] [SerializeField] private float _interactionDepth01 = 0.5f;
         [Min(0.01f)] [SerializeField] private float _surfaceTriggerThickness = 0.25f;
 
+        [Header("Surface")]
+        [SerializeField] private WaterSurfaceMode _surfaceMode;
+
         [Header("Profiles")]
         [SerializeField] private WaterStyleProfile _styleProfile;
         [SerializeField] private WaterQualityProfile _qualityProfile;
@@ -117,6 +120,7 @@ namespace Water25D
         public float WaterlineLocalY => _waterlineLocalY;
         public float WaterlineWorldY => transform.TransformPoint(new Vector3(0f, _waterlineLocalY, 0f)).y;
         public float InteractionDepth01 => _interactionDepth01;
+        public WaterSurfaceMode SurfaceMode => _surfaceMode;
         public WaterStyleProfile StyleProfile => _styleProfile;
         public WaterQualityProfile QualityProfile => _qualityProfile;
         public Transform TopSurface => _hierarchy != null ? _hierarchy.TopSurface : _topSurface;
@@ -140,6 +144,10 @@ namespace Water25D
 
         private void Reset()
         {
+            // Reset is called for a newly added component (and for an explicit Inspector
+            // reset). Existing serialized controllers omit this field and therefore keep
+            // the enum's zero-valued legacy-compatible mode.
+            _surfaceMode = WaterSurfaceMode.FlatStylized;
             EnsureModules();
             ApplyAuthoringChanges();
         }
@@ -161,7 +169,10 @@ namespace Water25D
 
             var isVisible = (_hierarchy.TopMeshRenderer != null && _hierarchy.TopMeshRenderer.isVisible) ||
                             (_hierarchy.FrontMeshRenderer != null && _hierarchy.FrontMeshRenderer.isVisible);
-            _ripple.Tick(Time.deltaTime, isVisible);
+            if (_surfaceMode == WaterSurfaceMode.SimulatedRipples && _enableRippleSimulation)
+            {
+                _ripple.Tick(_surfaceMode, Time.deltaTime, isVisible);
+            }
         }
 
         private void OnDisable()
@@ -178,6 +189,16 @@ namespace Water25D
         {
             SanitizeSerializedValues();
             if (_isApplyingChanges || !isActiveAndEnabled)
+            {
+                return;
+            }
+
+            // Unity may invoke OnValidate while a serialized property is still being
+            // applied. Replacing transient meshes from that callback is destructive and
+            // is rejected by the Editor. The package editor and Undo/Redo path explicitly
+            // call RefreshAuthoringPreview after serialization has completed; runtime
+            // validation can apply immediately.
+            if (!Application.isPlaying)
             {
                 return;
             }
@@ -221,13 +242,13 @@ namespace Water25D
         /// </summary>
         public void ResetRippleSimulation()
         {
-            if (!Application.isPlaying || !_enableRippleSimulation)
+            if (!Application.isPlaying || !_enableRippleSimulation || _surfaceMode != WaterSurfaceMode.SimulatedRipples)
             {
                 return;
             }
 
             EnsureModules();
-            _ripple.ResetSimulation();
+            _ripple.ResetSimulation(_surfaceMode);
         }
 
         public void SetDimensions(Vector2 topSurfaceSize, float frontSurfaceDepth)
@@ -245,6 +266,22 @@ namespace Water25D
         }
 
         /// <summary>
+        /// Changes the presentation mode and immediately applies its resource-ownership
+        /// contract. In particular, switching to FlatStylized releases any active CRT.
+        /// </summary>
+        public void SetSurfaceMode(WaterSurfaceMode surfaceMode)
+        {
+            if (_surfaceMode == surfaceMode)
+            {
+                return;
+            }
+
+            _surfaceMode = surfaceMode;
+            SanitizeSerializedValues();
+            ApplyAuthoringChanges();
+        }
+
+        /// <summary>
         /// Queues a world-space impact. The point is rejected when it lies outside the XZ top surface.
         /// </summary>
         public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp = true)
@@ -255,7 +292,7 @@ namespace Water25D
 
         public bool CreateContactRippleAt(Vector3 worldPosition, float initialStrength, bool initialUp, float radius)
         {
-            if (!_enableRippleSimulation || !Application.isPlaying)
+            if (!_enableRippleSimulation || !Application.isPlaying || _surfaceMode != WaterSurfaceMode.SimulatedRipples)
             {
                 return false;
             }
@@ -375,8 +412,8 @@ namespace Water25D
                 _geometry.ApplyIfNeeded(
                     _topSurfaceSize,
                     _frontSurfaceDepth,
-                    _waterlineLocalY,
                     qualitySettings,
+                    _surfaceMode,
                     _runtimeResources,
                     _hierarchy.TopMeshFilter,
                     _hierarchy.FrontMeshFilter);
@@ -401,9 +438,9 @@ namespace Water25D
                     _customAngularDrag);
                 _effectsConfigurationPending = true;
 
-                if (Application.isPlaying && _enableRippleSimulation)
+                if (Application.isPlaying && _enableRippleSimulation && _surfaceMode == WaterSurfaceMode.SimulatedRipples)
                 {
-                    _ripple.Ensure(_runtimeResources, _topSurfaceSize, qualitySettings, _rippleSimulationMaterialTemplate, this);
+                    _ripple.Ensure(_runtimeResources, _topSurfaceSize, qualitySettings, _rippleSimulationMaterialTemplate, this, _surfaceMode);
                 }
                 else
                 {
@@ -423,6 +460,7 @@ namespace Water25D
                     _frontSurfaceDepth,
                     _waterlineLocalY,
                     qualitySettings,
+                    _surfaceMode,
                     RippleTexture,
                     _topSortingLayerName,
                     _topSortingOrder,
@@ -486,6 +524,10 @@ namespace Water25D
             _reflectionResolutionScale = Mathf.Clamp(_reflectionResolutionScale, 0.1f, 1f);
             _reflectionUpdateIntervalFrames = Mathf.Clamp(_reflectionUpdateIntervalFrames, 1, 120);
             _reflectionStrength = Mathf.Clamp01(_reflectionStrength);
+            if (_surfaceMode != WaterSurfaceMode.SimulatedRipples && _surfaceMode != WaterSurfaceMode.FlatStylized)
+            {
+                _surfaceMode = WaterSurfaceMode.SimulatedRipples;
+            }
         }
 
         private void EnsureModules()

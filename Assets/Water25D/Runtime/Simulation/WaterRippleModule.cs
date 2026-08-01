@@ -1,4 +1,5 @@
 using UnityEngine;
+using Water25D.Rendering;
 
 namespace Water25D
 {
@@ -24,8 +25,16 @@ namespace Water25D
             Vector2 waterSize,
             WaterQualitySettings qualitySettings,
             Material materialTemplate,
-            Object context)
+            Object context,
+            WaterSurfaceMode surfaceMode)
         {
+            if (surfaceMode != WaterSurfaceMode.SimulatedRipples)
+            {
+                DisposeSimulator();
+                resources?.ReleaseRippleResources();
+                return;
+            }
+
             var needsNewSimulator = _simulator == null ||
                                     !_simulator.IsAvailable ||
                                     _appliedWaterSize != waterSize ||
@@ -60,13 +69,23 @@ namespace Water25D
             _simulator?.EnqueueImpact(impact);
         }
 
-        public void Tick(float deltaTime, bool isVisible)
+        public void Tick(WaterSurfaceMode surfaceMode, float deltaTime, bool isVisible)
         {
+            if (surfaceMode != WaterSurfaceMode.SimulatedRipples)
+            {
+                return;
+            }
+
             _simulator?.Tick(deltaTime, isVisible);
         }
 
-        public void ResetSimulation()
+        public void ResetSimulation(WaterSurfaceMode surfaceMode)
         {
+            if (surfaceMode != WaterSurfaceMode.SimulatedRipples)
+            {
+                return;
+            }
+
             _simulator?.ResetSimulation();
         }
 
