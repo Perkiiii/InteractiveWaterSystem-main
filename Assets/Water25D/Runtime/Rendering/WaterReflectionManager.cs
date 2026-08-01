@@ -310,6 +310,10 @@ namespace Water25D.Rendering
         private readonly List<ReflectionRegistration> _registrations = new List<ReflectionRegistration>(8);
         private readonly List<ReflectionGroup> _groups = new List<ReflectionGroup>(4);
 
+        public static bool HasInstance => _instance != null;
+        public static int RegisteredSurfaceCount => _instance != null ? _instance._registrations.Count : 0;
+        public static int ActiveGroupCount => _instance != null ? _instance._groups.Count : 0;
+
         public static ReflectionRegistration Register(
             Renderer surfaceRenderer,
             Transform plane,

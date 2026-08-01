@@ -12,5 +12,6 @@ namespace Water25D
 
         void EnqueueImpact(WaterRippleImpact impact);
         void Tick(float deltaTime, bool isVisible);
+        void ResetSimulation();
     }
 }

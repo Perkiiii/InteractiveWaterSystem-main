@@ -23,18 +23,28 @@
 - Added the deterministic benchmark driver and editor generator under `Samples/Benchmark`.
 - Added production tests for reflection grouping, disabled reflection, and FX pool exhaustion/return behaviour.
 
+### Inspector authoring UX slice
+
+- Replaced the generic controller editor with persistent, standard-Unity foldouts for Basic, Rendering, Ambient Waves, Contact Ripples, Reflection, FX, Physics, Interaction, Events, Performance, Validation, and Advanced.
+- Added theme-aware editor styles, editor-only foldout/handle state, inline style and quality profile editing, shared-asset warnings, duplicate/make-unique/default actions, and standalone profile inspectors.
+- Added conditional controls for reflection, FX, physics, and ripple quality, plus calculated geometry/state-memory/scheduling estimates that are explicitly labeled as estimates.
+- Added grouped validation with safe Undo-backed repairs, generated-hierarchy checks, material/profile/shader checks, and project setup warnings.
+- Added Undo-aware Scene view handles for width, visual depth, physical depth, and waterline, with 0.1-unit snapping and editor preview refresh.
+- Added minimal runtime preview/reset APIs so editor changes refresh dependent loaded controllers without exposing editor types to runtime code.
+
 ## Package boundaries
 
 `Assets/Water25D/` has no runtime, editor, or serialized dependency on `Assets/InteractiveWaterSystem/`, `Assets/Cainos/`, `Assets/DemoScenes/`, or Lucid Editor. Those systems remain reference-only baselines. Unity MCP is development tooling and is not referenced by the package.
 
 ## Validation record
 
-- Connected Unity Editor refreshed and compiled the package successfully.
-- EditMode: `Water25D.Tests.EditMode`, 10 passed, 0 failed. This includes persistent default asset/shader checks, prefab save/reload lifecycle checks, and CRT batching counters.
+- Connected Unity Editor refreshed and compiled the package successfully after the authoring pass.
+- EditMode: `Water25D.Tests.EditMode`, 24 passed, 0 failed. This includes the original production checks plus controller validation, profile workflows, calculated metrics, and preview-refresh tests.
 - PlayMode: `Water25D.Tests.PlayMode`, 1 passed, 0 failed.
 - Visual validation scene: `Assets/Water25D/Samples/Water25D_VisualValidation.unity`. Unity inspection confirmed persistent materials on both renderers, all five default controller asset references, and `{fileID: 0}` generated mesh slots after save. The [persistent-material capture](Validation/water25d-persistent-materials.png) shows the saved scene rendering without magenta error output.
 - In Play Mode, `CreateContactRippleAt` returned `true`; after a subsequent Unity frame, GPU readback of the 320 x 104 RGHalf state contained 132,848 nonzero bytes out of 133,120. This confirms impact state reached the CRT. A final target-device visual ripple comparison has not been claimed.
-- Package-scoped legacy-name search returned no matches after the rename.
+- Package-owned runtime and editor code returned no legacy/vendor references. The only package matches are intentional portability and audit instructions in documentation.
+- Authoring captures: [basic/rendering](Validation/water25d-inspector-basic-rendering.png), [ripples/performance](Validation/water25d-inspector-ripples-performance.png), [validation warning](Validation/water25d-inspector-validation-warning.png), and [scene handles](Validation/water25d-scene-handles.png). The validation capture intentionally shows the recoverable missing-optional-FX warning.
 
 ## Not completed
 
@@ -43,9 +53,15 @@
 - Compute simulation backend; the CRT backend remains the first production backend.
 - Full planar-reflection visual comparison, Frame Debugger capture, and allocation profiling.
 - Benchmark measurements. The generator is present, but no performance numbers are recorded.
+- Before/after screenshots of the legacy generic inspector were not available, so visual parity is documented by the current authoring captures and workflow description rather than a pixel comparison.
+- Full multi-selection/prefab-stage authoring review, measured profiler capture, and target-device validation remain outstanding.
 - Gameplay-camera-aware visibility scheduling and vertical-crossing-weighted impact strength remain follow-up work.
 - Automatic project layer, sorting-layer, URP renderer-feature, or Camera Sorting Layer Texture setup.
 
 ## Known setup requirements
 
 Project-level rendering and sorting configuration is intentionally not modified by the package. Follow `SETUP.md` and `PORTABILITY.md` when moving the package to another project.
+
+## Milestone status
+
+The Phase 3 Inspector and authoring workflow milestone was advanced by this slice but is not complete. Full prefab-stage, multi-selection, clean-project portability, measured profiling, and target-device validation remain follow-up work.

@@ -128,6 +128,7 @@ namespace Water25D
         public WaterReflectionMode ReflectionMode => _reflectionMode;
         public Camera ReflectionCameraSource => _reflectionCameraSource;
         public Texture RippleTexture => _ripple != null ? _ripple.HeightTexture : null;
+        public bool RippleSimulationAvailable => _ripple != null && _ripple.IsAvailable;
         public bool IsRippleSimulationSuspended => _ripple != null && _ripple.IsSuspended;
         public int DroppedRippleImpactCount => _ripple != null ? _ripple.DroppedImpactCount : 0;
 
@@ -192,11 +193,54 @@ namespace Water25D
             ApplyAuthoringChanges();
         }
 
+        /// <summary>
+        /// Reapplies property-block, hierarchy and module configuration without forcing a
+        /// geometry rebuild when the geometry inputs are unchanged. Editor tooling uses this
+        /// after a shared profile asset changes so the preview stays current without marking
+        /// the containing scene dirty.
+        /// </summary>
+        public void RefreshAuthoringPreview()
+        {
+            EnsureModules();
+            ApplyAuthoringChanges();
+        }
+
+        /// <summary>
+        /// Invalidates the geometry cache and rebuilds the transient preview meshes.
+        /// </summary>
+        public void RebuildGeometryPreview()
+        {
+            EnsureModules();
+            _geometry.Reset();
+            ApplyAuthoringChanges();
+        }
+
+        /// <summary>
+        /// Clears the instance-owned ripple state. Runtime ripple state is intentionally not
+        /// available in edit mode, so this is a safe no-op while authoring.
+        /// </summary>
+        public void ResetRippleSimulation()
+        {
+            if (!Application.isPlaying || !_enableRippleSimulation)
+            {
+                return;
+            }
+
+            EnsureModules();
+            _ripple.ResetSimulation();
+        }
+
         public void SetDimensions(Vector2 topSurfaceSize, float frontSurfaceDepth)
         {
             _topSurfaceSize = topSurfaceSize;
             _frontSurfaceDepth = frontSurfaceDepth;
             SanitizeSerializedValues();
+            ApplyAuthoringChanges();
+        }
+
+        public void SetWaterlineLocalY(float waterlineLocalY)
+        {
+            _waterlineLocalY = waterlineLocalY;
             ApplyAuthoringChanges();
         }
 

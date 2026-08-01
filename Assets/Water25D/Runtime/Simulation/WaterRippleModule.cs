@@ -65,6 +65,11 @@ namespace Water25D
             _simulator?.Tick(deltaTime, isVisible);
         }
 
+        public void ResetSimulation()
+        {
+            _simulator?.ResetSimulation();
+        }
+
         public void Dispose()
         {
             DisposeSimulator();

@@ -143,6 +143,23 @@ namespace Water25D
             }
         }
 
+        public void ResetSimulation()
+        {
+            if (!IsAvailable)
+            {
+                return;
+            }
+
+            _texture.Initialize();
+            _queueHead = 0;
+            _queueCount = 0;
+            _droppedImpactCount = 0;
+            _timeAccumulator = 0f;
+            _idleTime = 0f;
+            ImpactInjectionUpdateCount = 0;
+            FullSurfacePropagationUpdateCount = 0;
+        }
+
         public void Dispose()
         {
             if (_disposed)

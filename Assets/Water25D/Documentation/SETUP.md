@@ -12,12 +12,23 @@ The default quality settings produce a 320 x 104 ripple state for a 20 x 6.5 top
 
 The top surface is local XZ, from `(0, waterline, 0)` to `(width, waterline, visual depth)`. The front surface is local XY and extends downward by physical depth. Gameplay remains a flat 2D surface with an explicit depth lane; it does not read GPU height data. Generated preview meshes are transient and are rebuilt after a domain reload or scene reopen; persistent surface materials are saved with the scene or prefab.
 
+## Inspector and authoring workflow
+
+The controller Inspector is organized into persistent foldouts for Basic, Rendering, Ambient Waves, Contact Ripples, Reflection, FX, Physics, Interaction, Events, Performance, Validation, and Advanced. Profile values are editable inline, while shared profile assets display a warning and offer **Make Unique Copy**, **Duplicate**, **Create New**, and **Package Default** actions. See [AUTHORING.md](AUTHORING.md) for the complete workflow.
+
+The Performance section reports calculated geometry, ripple-resolution, memory, and scheduling estimates. These are authoring estimates, not measured profiler data. The Validation section groups errors, warnings, and information results and provides Undo-backed safe repairs. Scene handles expose width, visual depth, physical depth, and waterline with 0.1-unit snapping and Undo.
+
 ## Manual verification
 
-- Open `Assets/Water25D/Samples/Water25D_VisualValidation.unity` and select the `Water25D` root. Confirm the generated hierarchy and the reflection/FX sections in the Inspector.
+- Open `Assets/Water25D/Samples/Water25D_VisualValidation.unity` and select the `Water25D` root. Confirm the generated hierarchy, Basic fields, inline Rendering profile fields, and the persistent foldout sections in the Inspector.
+- Enable **Show Scene Handles** in Basic. In the Scene view, confirm the labeled top/front surfaces and width, visual-depth, physical-depth, and waterline handles; move one by 0.1 units and use Undo to restore it.
+- Open Contact Ripples and Performance. Confirm the quality profile controls, calculated ripple resolution/state estimate, and runtime-only simulator note. Enter Play Mode and verify the reset control becomes available only while the simulator is active.
+- Open Validation. The sample may show the recoverable **Optional FX definitions not assigned** warning when effects are enabled without project-owned definitions. Confirm **Validate** and **Fix All Safe Issues** are available and do not silently modify unrelated assets.
 - Enter Play Mode and use an oblique `Main Camera` view. Expect a coherent analytical wave along the XZ top surface and XY front surface seam.
 - Call `Water25DController.CreateContactRippleAt` from a test script or drop a dynamic `Rigidbody2D` through the thin trigger. Expect one logical surface-enter event for a multi-collider body and a CRT impact state update.
 - Switch Reflection Mode to `Planar`, assign the scene camera, and inspect the Frame Debugger for one reflection camera render per compatible group. Switch back to `Stylized` and confirm no reflection camera is created.
 - Trigger surface enter/exit and submerged events, then confirm FX entries are reused after their lifetime and that no gameplay-time `Instantiate`/`Destroy` occurs.
 - Use the Frame Debugger to confirm the ripple state has no mipmaps. Use the Profiler to inspect GC allocations, RenderTexture recreation, and reflection cost before recording performance claims.
 - Use `GameObject > Water 2.5D > Create Deterministic Benchmark Scene` to generate the benchmark scene, then record measurements separately; the package does not contain unmeasured performance numbers.
+
+Current authoring captures from the sample scene are stored under [`Documentation/Validation`](Validation/): [basic and rendering](Validation/water25d-inspector-basic-rendering.png), [ripples and performance](Validation/water25d-inspector-ripples-performance.png), [validation warning](Validation/water25d-inspector-validation-warning.png), and [scene handles](Validation/water25d-scene-handles.png).

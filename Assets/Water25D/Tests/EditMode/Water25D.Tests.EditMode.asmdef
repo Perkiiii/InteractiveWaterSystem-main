@@ -3,6 +3,7 @@
   "rootNamespace": "Water25D.Tests",
   "references": [
     "Water25D.Runtime",
+    "Water25D.Editor",
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner"
   ],
