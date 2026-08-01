@@ -1746,7 +1746,11 @@ MonoBehaviour:
         m_SelectedSource:
           rid: -2
         m_Provider2DCache:
-          rid: -2
+          rid: 4355057832406548609
+    - rid: 4355057832406548609
+      type: {class: 'Provider2DCache`1[[UnityEngine.Rendering.Universal.Light2DProvider, Unity.RenderPipelines.Universal.2D.Runtime]]', ns: UnityEngine.Rendering.Universal, asm: Unity.RenderPipelines.Universal.2D.Runtime}
+      data:
+        m_Cache: []
 --- !u!1 &340665413
 GameObject:
   m_ObjectHideFlags: 0
@@ -2648,7 +2652,7 @@ MonoBehaviour:
   _enableEffects: 1
   _splashDefinition: {fileID: 0}
   _bubbleDefinition: {fileID: 0}
-  _maximumFxPoolSize: 16
+  _maximumFxPoolSize: 1
   _enableSurfaceInteraction: 1
   _enableBuoyancy: 1
   _surfaceInteractionLayers:
@@ -2661,12 +2665,12 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   _includeTriggerCollidersInSurfaceInteraction: 1
-  _buoyancyDensity: 1
-  _buoyancyLinearDamping: 0.1
+  _buoyancyDensity: 5
+  _buoyancyLinearDamping: 5
   _buoyancyAngularDamping: 0.1
-  _enableCustomDrag: 0
-  _customLinearDrag: 0
-  _customAngularDrag: 0
+  _enableCustomDrag: 1
+  _customLinearDrag: 10
+  _customAngularDrag: 10
   _enableRippleSimulation: 1
   _impactSpeedForFullStrength: 6
   _minimumImpactStrength: 0.08
@@ -3366,8 +3370,8 @@ BuoyancyEffector2D:
     serializedVersion: 2
     m_Bits: 4294967295
   m_SurfaceLevel: 0
-  m_Density: 1
-  m_LinearDamping: 0.1
+  m_Density: 5
+  m_LinearDamping: 5
   m_AngularDamping: 0.1
   m_FlowAngle: 0
   m_FlowMagnitude: 0

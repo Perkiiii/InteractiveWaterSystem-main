@@ -720,3 +720,23 @@ A task is complete only when:
 * Milestone status is accurate.
 
 Code that merely appears plausible is not sufficient evidence that a Unity water feature is complete.
+
+## Water25D flat-stylized redesign
+
+For work under `Assets/Water25D/`, read these files before editing:
+
+1. `Assets/Water25D/Documentation/IMPLEMENTATION_PLAN.md`
+2. `Assets/Water25D/Documentation/Design/FLAT_STYLIZED_IMPLEMENTATION_PLAN.md`
+3. `Assets/Water25D/Documentation/STATUS.md`
+4. `Assets/Water25D/Documentation/Design/FLAT_STYLIZED_DESIGN_BRIEF.md`
+
+The flat-stylized implementation plan is authoritative for the redesign.
+The design brief supplies rationale and research questions, not implementation status.
+
+Implement one bounded task at a time.
+Do not modify the legacy custom water or Cainos packages.
+Do not destructively modify existing Water25D profiles, materials, prefabs, or serialized controllers.
+Existing controllers must remain compatible with SimulatedRipples.
+Newly created controllers should eventually default to FlatStylized.
+Distinguish tests actually run from manual Unity validation still required.
+Update STATUS.md only with work genuinely completed and validated.

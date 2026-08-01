@@ -17,7 +17,7 @@ MonoBehaviour:
   _frontDeepColor: {r: 0.025, g: 0.1, b: 0.18, a: 0.94}
   _foamColor: {r: 0.78, g: 0.95, b: 1, a: 0.8}
   _ambientWaveAmplitude: 0.06
-  _ambientWaveLength: 3.5
+  _ambientWaveLength: 15
   _ambientWaveSpeed: 0.8
   _ambientWaveDirection: {x: 1, y: 0.15}
   _rippleAmplitude: 0.18
