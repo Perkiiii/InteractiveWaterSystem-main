@@ -10,6 +10,9 @@ Shader "Water25D/Top Surface"
         _SurfaceMode("Surface Mode", Float) = 0
         _WaterSize("Water Size", Vector) = (20, 6.5, 0, 0)
         _WaterRingCount("Surface Ring Count", Float) = 0
+        _WaterFoamCount("Contact Foam Count", Float) = 0
+        _WaterFoamSoftness("Contact Foam Softness", Float) = 0.06
+        _FoamReflectionOcclusion("Foam Reflection Occlusion", Range(0, 1)) = 0.85
         _WaveAmplitude("Ambient Wave Amplitude", Float) = 0.06
         _WaveLength("Ambient Wave Length", Float) = 3.5
         _WaveSpeed("Ambient Wave Speed", Float) = 0.8
@@ -45,6 +48,7 @@ Shader "Water25D/Top Surface"
         SAMPLER(sampler_ReflectionTexture);
 
         #define WATER_MAX_RINGS 16
+        #define WATER_MAX_CONTACT_FOAMS 8
 
         CBUFFER_START(UnityPerMaterial)
             half4 _BaseColor;
@@ -56,6 +60,11 @@ Shader "Water25D/Top Surface"
             float _WaterRingCount;
             float4 _WaterRingsA[WATER_MAX_RINGS];
             float4 _WaterRingsB[WATER_MAX_RINGS];
+            float _WaterFoamCount;
+            float4 _WaterFoamsA[WATER_MAX_CONTACT_FOAMS];
+            float4 _WaterFoamsB[WATER_MAX_CONTACT_FOAMS];
+            float _WaterFoamSoftness;
+            float _FoamReflectionOcclusion;
             float _WaveAmplitude;
             float _WaveLength;
             float _WaveSpeed;
@@ -81,6 +90,39 @@ Shader "Water25D/Top Surface"
             float3 worldPos : TEXCOORD1;
             UNITY_VERTEX_OUTPUT_STEREO
         };
+
+        float EvaluateContactFoam(float2 localXZ)
+        {
+            if (_SurfaceMode < 0.5 || _WaterFoamCount <= 0.5)
+            {
+                return 0.0;
+            }
+
+            int foamCount = min((int)_WaterFoamCount, WATER_MAX_CONTACT_FOAMS);
+            float accumulation = 0.0;
+            for (int foamIndex = 0; foamIndex < WATER_MAX_CONTACT_FOAMS; foamIndex++)
+            {
+                if (foamIndex >= foamCount)
+                {
+                    break;
+                }
+
+                float4 foamA = _WaterFoamsA[foamIndex];
+                float4 foamB = _WaterFoamsB[foamIndex];
+                float2 halfSize = max(float2(0.001, 0.001), float2(foamA.z, foamB.x));
+                float2 ellipseOffset = (localXZ - foamA.xy) / halfSize;
+                float radialDistance = length(ellipseOffset);
+                float softness = max(0.001, _WaterFoamSoftness / min(halfSize.x, halfSize.y));
+                float ellipse = 1.0 - smoothstep(1.0, 1.0 + softness, radialDistance);
+                float breakup = 0.84 +
+                    0.16 * sin(dot(localXZ - foamA.xy, float2(1.73, 2.37)) + foamB.w * 6.2831853 + _Time.y * 0.45);
+                float contactAmount = lerp(0.72, 1.0, saturate(foamB.z));
+                float contribution = ellipse * saturate(breakup) * saturate(foamA.w) * saturate(foamB.y) * contactAmount;
+                accumulation = saturate(accumulation + contribution);
+            }
+
+            return accumulation;
+        }
 
         Varyings Vert(Attributes input)
         {
@@ -117,6 +159,8 @@ Shader "Water25D/Top Surface"
 
         half4 Frag(Varyings input) : SV_Target
         {
+            float2 localXZ = input.uv * _WaterSize.xy;
+            half contactFoam = EvaluateContactFoam(localXZ);
             half edgeDistance = min(min(input.uv.x, 1.0 - input.uv.x), min(input.uv.y, 1.0 - input.uv.y));
             half edgeFoam = 1.0 - smoothstep(0.0, 0.035, edgeDistance);
             half4 color = _BaseColor;
@@ -125,7 +169,8 @@ Shader "Water25D/Top Surface"
             if (_ReflectionFallback > 0.5)
             {
                 half fallback = saturate(0.32 + input.uv.y * 0.48);
-                color.rgb = lerp(color.rgb, _FoamColor.rgb, fallback * _ReflectionStrength * 0.35);
+                half reflectionAmount = saturate(_ReflectionStrength) * (1.0 - contactFoam * saturate(_FoamReflectionOcclusion));
+                color.rgb = lerp(color.rgb, _FoamColor.rgb, fallback * reflectionAmount * 0.35);
             }
             if (_ReflectionEnabled > 0.5)
             {
@@ -133,12 +178,13 @@ Shader "Water25D/Top Surface"
                 float2 reflectionUV = reflectionClip.xy / max(reflectionClip.w, 0.0001) * 0.5 + 0.5;
                 reflectionUV.y = 1.0 - reflectionUV.y;
                 half4 reflection = SAMPLE_TEXTURE2D(_ReflectionTexture, sampler_ReflectionTexture, reflectionUV);
-                color.rgb = lerp(color.rgb, reflection.rgb, saturate(_ReflectionStrength) * reflection.a);
+                half reflectionAmount = saturate(_ReflectionStrength) *
+                    (1.0 - contactFoam * saturate(_FoamReflectionOcclusion));
+                color.rgb = lerp(color.rgb, reflection.rgb, reflectionAmount * reflection.a);
             }
 
             if (_SurfaceMode > 0.5 && _WaterRingCount > 0.5)
             {
-                float2 localXZ = input.uv * _WaterSize.xy;
                 int ringCount = min((int)_WaterRingCount, WATER_MAX_RINGS);
                 half ringHighlight = 0.0;
                 for (int ringIndex = 0; ringIndex < WATER_MAX_RINGS; ringIndex++)
@@ -163,6 +209,9 @@ Shader "Water25D/Top Surface"
                 color.rgb = lerp(color.rgb, _FoamColor.rgb, ringHighlight * 0.55);
                 color.a = saturate(color.a + ringHighlight * 0.12);
             }
+
+            color.rgb = lerp(color.rgb, _FoamColor.rgb, contactFoam * 0.75);
+            color.a = saturate(color.a + contactFoam * 0.18);
             return color;
         }
         ENDHLSL

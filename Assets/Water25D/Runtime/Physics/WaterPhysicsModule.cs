@@ -26,7 +26,8 @@ namespace Water25D
             float buoyancyAngularDamping,
             bool enableCustomDrag,
             float customLinearDrag,
-            float customAngularDrag)
+            float customAngularDrag,
+            int maximumTrackedBodies)
         {
             var width = Mathf.Max(0.01f, topSurfaceSize.x);
             var depth = Mathf.Max(0.01f, frontSurfaceDepth);
@@ -47,7 +48,9 @@ namespace Water25D
                 controller,
                 surfaceInteractionLayers,
                 surfaceTriggerInteractionLayers,
-                includeTriggerCollidersInSurfaceInteraction);
+                includeTriggerCollidersInSurfaceInteraction,
+                maximumTrackedBodies,
+                controller.SurfaceCrossingEpsilon);
             hierarchy.SurfaceInteraction.enabled = enableSurfaceInteraction;
 
             hierarchy.BuoyancyCollider.size = new Vector2(width, depth);
@@ -59,7 +62,8 @@ namespace Water25D
                 buoyancyLayers,
                 enableCustomDrag,
                 customLinearDrag,
-                customAngularDrag);
+                customAngularDrag,
+                maximumTrackedBodies);
             hierarchy.PhysicsVolume.enabled = enableBuoyancy;
 
             if (enableBuoyancy && hierarchy.BuoyancyEffector == null)

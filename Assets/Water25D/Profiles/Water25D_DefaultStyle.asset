@@ -21,5 +21,10 @@ MonoBehaviour:
   _ambientWaveSpeed: 0.8
   _ambientWaveDirection: {x: 1, y: 0.15}
   _rippleAmplitude: 0.18
+  _ringLifetime: 1.25
+  _ringExpansionMultiplier: 6
+  _ringThickness: 0.05
+  _ringSoftness: 0.04
+  _ringIntensity: 0.75
   _topMaterialTemplate: {fileID: 2100000, guid: 7a535f86bf2ac5d4a8c6be20c105e27f, type: 2}
   _frontMaterialTemplate: {fileID: 2100000, guid: ac0653dce44e03d4d93782767757ff01, type: 2}

@@ -20,6 +20,12 @@ namespace Water25D
         public float RingThickness;
         public float RingSoftness;
         public float RingIntensity;
+        public float ContactFoamWidthPadding;
+        public float ContactFoamHalfDepth;
+        public float ContactFoamSoftness;
+        public float ContactFoamIntensity;
+        public float ContactFoamFadeDuration;
+        public float FoamReflectionOcclusion;
 
         public static WaterStyleSettings Default => new WaterStyleSettings
         {
@@ -36,7 +42,13 @@ namespace Water25D
             RingExpansionMultiplier = 6f,
             RingThickness = 0.05f,
             RingSoftness = 0.04f,
-            RingIntensity = 0.75f
+            RingIntensity = 0.75f,
+            ContactFoamWidthPadding = 0.08f,
+            ContactFoamHalfDepth = 0.16f,
+            ContactFoamSoftness = 0.06f,
+            ContactFoamIntensity = 0.85f,
+            ContactFoamFadeDuration = 0.35f,
+            FoamReflectionOcclusion = 0.85f
         };
 
         public void Sanitize()
@@ -46,10 +58,16 @@ namespace Water25D
             AmbientWaveSpeed = Mathf.Max(0f, AmbientWaveSpeed);
             RippleAmplitude = Mathf.Max(0f, RippleAmplitude);
             RingLifetime = SanitizePositive(RingLifetime, Default.RingLifetime, 0.01f, 60f);
-            RingExpansionMultiplier = SanitizePositive(RingExpansionMultiplier, Default.RingExpansionMultiplier, 0.01f, 100f);
+            RingExpansionMultiplier = SanitizePositive(RingExpansionMultiplier, Default.RingExpansionMultiplier, 1f, 100f);
             RingThickness = SanitizePositive(RingThickness, Default.RingThickness, 0.001f, 10f);
             RingSoftness = SanitizeNonNegative(RingSoftness, Default.RingSoftness, 0f, 10f);
             RingIntensity = IsFinite(RingIntensity) ? Mathf.Clamp01(RingIntensity) : Default.RingIntensity;
+            ContactFoamWidthPadding = SanitizeNonNegative(ContactFoamWidthPadding, Default.ContactFoamWidthPadding, 0f, 2f);
+            ContactFoamHalfDepth = SanitizePositive(ContactFoamHalfDepth, Default.ContactFoamHalfDepth, 0.01f, 2f);
+            ContactFoamSoftness = SanitizeNonNegative(ContactFoamSoftness, Default.ContactFoamSoftness, 0f, 1f);
+            ContactFoamIntensity = IsFinite(ContactFoamIntensity) ? Mathf.Clamp01(ContactFoamIntensity) : Default.ContactFoamIntensity;
+            ContactFoamFadeDuration = SanitizePositive(ContactFoamFadeDuration, Default.ContactFoamFadeDuration, 0.01f, 5f);
+            FoamReflectionOcclusion = IsFinite(FoamReflectionOcclusion) ? Mathf.Clamp01(FoamReflectionOcclusion) : Default.FoamReflectionOcclusion;
             if (AmbientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 AmbientWaveDirection = Vector2.right;
@@ -82,6 +100,8 @@ namespace Water25D
             block.SetFloat(WaterShaderIds.RippleAmplitude, RippleAmplitude);
             block.SetFloat(WaterShaderIds.RippleScale, 1f);
             block.SetFloat(WaterShaderIds.RippleHeightOffset, 0f);
+            block.SetFloat(WaterShaderIds.SurfaceFoamSoftness, ContactFoamSoftness);
+            block.SetFloat(WaterShaderIds.FoamReflectionOcclusion, FoamReflectionOcclusion);
         }
 
         public bool Equals(WaterStyleSettings other)
@@ -99,7 +119,13 @@ namespace Water25D
                    Mathf.Approximately(RingExpansionMultiplier, other.RingExpansionMultiplier) &&
                    Mathf.Approximately(RingThickness, other.RingThickness) &&
                    Mathf.Approximately(RingSoftness, other.RingSoftness) &&
-                   Mathf.Approximately(RingIntensity, other.RingIntensity);
+                   Mathf.Approximately(RingIntensity, other.RingIntensity) &&
+                   Mathf.Approximately(ContactFoamWidthPadding, other.ContactFoamWidthPadding) &&
+                   Mathf.Approximately(ContactFoamHalfDepth, other.ContactFoamHalfDepth) &&
+                   Mathf.Approximately(ContactFoamSoftness, other.ContactFoamSoftness) &&
+                   Mathf.Approximately(ContactFoamIntensity, other.ContactFoamIntensity) &&
+                   Mathf.Approximately(ContactFoamFadeDuration, other.ContactFoamFadeDuration) &&
+                   Mathf.Approximately(FoamReflectionOcclusion, other.FoamReflectionOcclusion);
         }
 
         public override bool Equals(object obj)
@@ -124,7 +150,13 @@ namespace Water25D
                 hash = hash * 31 + RingExpansionMultiplier.GetHashCode();
                 hash = hash * 31 + RingThickness.GetHashCode();
                 hash = hash * 31 + RingSoftness.GetHashCode();
-                return hash * 31 + RingIntensity.GetHashCode();
+                hash = hash * 31 + RingIntensity.GetHashCode();
+                hash = hash * 31 + ContactFoamWidthPadding.GetHashCode();
+                hash = hash * 31 + ContactFoamHalfDepth.GetHashCode();
+                hash = hash * 31 + ContactFoamSoftness.GetHashCode();
+                hash = hash * 31 + ContactFoamIntensity.GetHashCode();
+                hash = hash * 31 + ContactFoamFadeDuration.GetHashCode();
+                return hash * 31 + FoamReflectionOcclusion.GetHashCode();
             }
         }
 
@@ -174,10 +206,18 @@ namespace Water25D
 
         [Header("Procedural Surface Rings")]
         [Min(0.01f)] [SerializeField] private float _ringLifetime = 1.25f;
-        [Min(0.01f)] [SerializeField] private float _ringExpansionMultiplier = 6f;
+        [Min(1f)] [SerializeField] private float _ringExpansionMultiplier = 6f;
         [Min(0.001f)] [SerializeField] private float _ringThickness = 0.05f;
         [Min(0f)] [SerializeField] private float _ringSoftness = 0.04f;
         [Range(0f, 1f)] [SerializeField] private float _ringIntensity = 0.75f;
+
+        [Header("Contact Foam")]
+        [Min(0f)] [SerializeField] private float _contactFoamWidthPadding = 0.08f;
+        [Min(0.01f)] [SerializeField] private float _contactFoamHalfDepth = 0.16f;
+        [Range(0f, 1f)] [SerializeField] private float _contactFoamSoftness = 0.06f;
+        [Range(0f, 1f)] [SerializeField] private float _contactFoamIntensity = 0.85f;
+        [Min(0.01f)] [SerializeField] private float _contactFoamFadeDuration = 0.35f;
+        [Range(0f, 1f)] [SerializeField] private float _foamReflectionOcclusion = 0.85f;
 
         [Header("Optional Material Templates")]
         [Tooltip("Optional project or package-owned template. It is never mutated at runtime.")]
@@ -205,7 +245,13 @@ namespace Water25D
                 RingExpansionMultiplier = _ringExpansionMultiplier,
                 RingThickness = _ringThickness,
                 RingSoftness = _ringSoftness,
-                RingIntensity = _ringIntensity
+                RingIntensity = _ringIntensity,
+                ContactFoamWidthPadding = _contactFoamWidthPadding,
+                ContactFoamHalfDepth = _contactFoamHalfDepth,
+                ContactFoamSoftness = _contactFoamSoftness,
+                ContactFoamIntensity = _contactFoamIntensity,
+                ContactFoamFadeDuration = _contactFoamFadeDuration,
+                FoamReflectionOcclusion = _foamReflectionOcclusion
             };
             settings.Sanitize();
             return settings;
@@ -223,6 +269,12 @@ namespace Water25D
             _ringThickness = settings.RingThickness;
             _ringSoftness = settings.RingSoftness;
             _ringIntensity = settings.RingIntensity;
+            _contactFoamWidthPadding = settings.ContactFoamWidthPadding;
+            _contactFoamHalfDepth = settings.ContactFoamHalfDepth;
+            _contactFoamSoftness = settings.ContactFoamSoftness;
+            _contactFoamIntensity = settings.ContactFoamIntensity;
+            _contactFoamFadeDuration = settings.ContactFoamFadeDuration;
+            _foamReflectionOcclusion = settings.FoamReflectionOcclusion;
             if (_ambientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 _ambientWaveDirection = Vector2.right;

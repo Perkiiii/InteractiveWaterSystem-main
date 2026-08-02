@@ -66,6 +66,7 @@ namespace Water25D
         [SerializeField] private LayerMask _surfaceTriggerInteractionLayers = ~0;
         [SerializeField] private LayerMask _buoyancyLayers = ~0;
         [SerializeField] private bool _includeTriggerCollidersInSurfaceInteraction = true;
+        [Range(0.001f, 0.25f)] [SerializeField] private float _surfaceCrossingEpsilon = 0.02f;
         [Min(0f)] [SerializeField] private float _buoyancyDensity = 1f;
         [Min(0f)] [SerializeField] private float _buoyancyLinearDamping = 0.1f;
         [Min(0f)] [SerializeField] private float _buoyancyAngularDamping = 0.1f;
@@ -124,6 +125,7 @@ namespace Water25D
         public float WaterlineLocalY => _waterlineLocalY;
         public float WaterlineWorldY => transform.TransformPoint(new Vector3(0f, _waterlineLocalY, 0f)).y;
         public float InteractionDepth01 => _interactionDepth01;
+        public float SurfaceCrossingEpsilon => _surfaceCrossingEpsilon;
         public WaterSurfaceMode SurfaceMode => _surfaceMode;
         public WaterStyleProfile StyleProfile => _styleProfile;
         public WaterQualityProfile QualityProfile => _qualityProfile;
@@ -141,6 +143,12 @@ namespace Water25D
         public int DroppedRippleImpactCount => _ripple != null ? _ripple.DroppedImpactCount : 0;
         public int ActiveSurfaceRingCount => _surfacePresentation != null ? _surfacePresentation.ActiveRingCount : 0;
         public int ReplacedSurfaceRingCount => _surfacePresentation != null ? _surfacePresentation.ReplacedRingCount : 0;
+        public int ActiveContactFoamCount => _surfacePresentation != null ? _surfacePresentation.ActiveContactFoamCount : 0;
+        public int FadingContactFoamCount => _surfacePresentation != null ? _surfacePresentation.FadingContactFoamCount : 0;
+        public int DroppedContactFoamCount => _surfacePresentation != null ? _surfacePresentation.DroppedContactFoamCount : 0;
+        public int TrackedSurfaceBodyCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.LogicalContactCount : 0;
+        public int DroppedTrackedSurfaceBodyCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.DroppedTrackedBodyCount : 0;
+        public int SurfaceColliderSampleOverflowCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.ColliderSampleOverflowCount : 0;
 
         private void OnEnable()
         {
@@ -306,6 +314,7 @@ namespace Water25D
             var qualitySettings = GetQualitySettings();
             var styleSettings = _styleProfile != null ? _styleProfile.GetSettings() : WaterStyleSettings.Default;
             _surfacePresentation.Configure(qualitySettings, styleSettings);
+            var resolvedRadius = ResolveImpactRadius(radius, qualitySettings.ImpactRadius);
 
             if (_surfaceMode == WaterSurfaceMode.FlatStylized)
             {
@@ -314,13 +323,7 @@ namespace Water25D
                     return false;
                 }
 
-                var ringRadius = radius;
-                if (!IsFinite(ringRadius) || ringRadius <= 0f)
-                {
-                    ringRadius = qualitySettings.ImpactRadius;
-                }
-
-                if (!_surfacePresentation.AddRing(localXZ, strength, ringRadius, initialUp))
+                if (!_surfacePresentation.AddRing(localXZ, strength, resolvedRadius, initialUp))
                 {
                     return false;
                 }
@@ -339,8 +342,7 @@ namespace Water25D
                 return false;
             }
 
-            // Preserve the simulated path's established radius and direction semantics.
-            _ripple.EnqueueImpact(new WaterRippleImpact(uv, strength, radius, initialUp));
+            _ripple.EnqueueImpact(new WaterRippleImpact(uv, strength, resolvedRadius, initialUp));
             return true;
         }
 
@@ -442,6 +444,66 @@ namespace Water25D
             }
         }
 
+        /// <summary>
+        /// Maps one logical surface contact into the fixed local-XZ foam data owned by the
+        /// presentation module. Physics never writes shader arrays directly.
+        /// </summary>
+        internal void UpdateSurfaceContactFoam(
+            int bodyKey,
+            Vector2 worldContactCenter,
+            float worldContactWidth,
+            float submersion01,
+            float intensity)
+        {
+            if (_surfaceMode != WaterSurfaceMode.FlatStylized || _surfacePresentation == null ||
+                !IsFinite(worldContactCenter.x) || !IsFinite(worldContactCenter.y) ||
+                !IsFinite(worldContactWidth) || worldContactWidth < 0f ||
+                !IsFinite(submersion01) || !IsFinite(intensity))
+            {
+                return;
+            }
+
+            if (!TryGetInteractionWorldPositionForContact(worldContactCenter, out var worldCenter))
+            {
+                ReleaseSurfaceContactFoam(bodyKey);
+                return;
+            }
+
+            if (!TryGetSurfaceLocalXZ(worldCenter, out var localCenter))
+            {
+                ReleaseSurfaceContactFoam(bodyKey);
+                return;
+            }
+
+            var halfWorldWidth = worldContactWidth * 0.5f;
+            var localLeft = transform.InverseTransformPoint(worldCenter + Vector3.left * halfWorldWidth);
+            var localRight = transform.InverseTransformPoint(worldCenter + Vector3.right * halfWorldWidth);
+            var localWidth = Mathf.Abs(localRight.x - localLeft.x);
+            if (!IsFinite(localWidth))
+            {
+                ReleaseSurfaceContactFoam(bodyKey);
+                return;
+            }
+
+            if (_surfacePresentation.UpdateContactFoam(
+                    bodyKey,
+                    localCenter,
+                    localWidth * 0.5f,
+                    Mathf.Clamp01(submersion01),
+                    Mathf.Clamp01(intensity)))
+            {
+                UploadSurfacePresentation();
+            }
+        }
+
+        internal void ReleaseSurfaceContactFoam(int bodyKey)
+        {
+            if (_surfacePresentation != null && _surfacePresentation.ReleaseContactFoam(bodyKey))
+            {
+                UploadSurfacePresentation();
+            }
+        }
+
         private void ApplyAuthoringChanges()
         {
             if (_isApplyingChanges)
@@ -514,7 +576,8 @@ namespace Water25D
                     _buoyancyAngularDamping,
                     _enableCustomDrag,
                     _customLinearDrag,
-                    _customAngularDrag);
+                    _customAngularDrag,
+                    qualitySettings.MaximumTrackedSurfaceBodies);
                 _effectsConfigurationPending = true;
 
                 if (Application.isPlaying && _enableRippleSimulation && _surfaceMode == WaterSurfaceMode.SimulatedRipples)
@@ -593,6 +656,7 @@ namespace Water25D
             _frontSurfaceDepth = Mathf.Max(0.01f, _frontSurfaceDepth);
             _surfaceTriggerThickness = Mathf.Max(0.01f, _surfaceTriggerThickness);
             _interactionDepth01 = Mathf.Clamp01(_interactionDepth01);
+            _surfaceCrossingEpsilon = Mathf.Clamp(_surfaceCrossingEpsilon, 0.001f, 0.25f);
             _buoyancyDensity = Mathf.Max(0f, _buoyancyDensity);
             _buoyancyLinearDamping = Mathf.Max(0f, _buoyancyLinearDamping);
             _buoyancyAngularDamping = Mathf.Max(0f, _buoyancyAngularDamping);
@@ -650,6 +714,8 @@ namespace Water25D
 
         private void DisposeRuntimeResources()
         {
+            _hierarchy?.SurfaceInteraction?.ClearContacts();
+            _hierarchy?.PhysicsVolume?.ClearContacts();
             _surfacePresentation?.Reset();
             if (_hierarchy != null)
             {
@@ -698,7 +764,33 @@ namespace Water25D
             _rendering.ApplySurfacePresentation(
                 _hierarchy.TopMeshRenderer,
                 _hierarchy.FrontMeshRenderer,
-                _surfacePresentation.RenderData);
+                _surfacePresentation.RenderData,
+                _surfaceMode == WaterSurfaceMode.FlatStylized);
+        }
+
+        private bool TryGetInteractionWorldPositionForContact(Vector2 worldPosition, out Vector3 worldContactPosition)
+        {
+            var localPosition = transform.InverseTransformPoint(new Vector3(worldPosition.x, transform.position.y, transform.position.z));
+            var width = Mathf.Max(0.01f, _topSurfaceSize.x);
+            if (!IsFinite(localPosition.x) || localPosition.x < 0f || localPosition.x > width)
+            {
+                worldContactPosition = default;
+                return false;
+            }
+
+            localPosition.y = _waterlineLocalY;
+            localPosition.z = Mathf.Clamp01(_interactionDepth01) * Mathf.Max(0.01f, _topSurfaceSize.y);
+            worldContactPosition = transform.TransformPoint(localPosition);
+            return IsFinite(worldContactPosition.x) && IsFinite(worldContactPosition.y) && IsFinite(worldContactPosition.z);
+        }
+
+        private static float ResolveImpactRadius(float radius, float defaultRadius)
+        {
+            var fallbackRadius = !IsFinite(defaultRadius) || defaultRadius <= 0f
+                ? WaterQualitySettings.Default.ImpactRadius
+                : defaultRadius;
+            var resolvedRadius = !IsFinite(radius) || radius <= 0f ? fallbackRadius : radius;
+            return Mathf.Clamp(resolvedRadius, 0.005f, 10f);
         }
 
         private static bool IsFinite(float value)

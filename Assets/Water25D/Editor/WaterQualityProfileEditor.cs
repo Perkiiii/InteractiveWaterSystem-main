@@ -59,6 +59,15 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawContactFoamFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Contact Foam Capacity", delegate
+            {
+                Property(serializedObject, "_maximumContactFoams", "Maximum Contact Foams", "Fixed contact-foam capacity for FlatStylized. Values are clamped to 1–8 and do not recreate CRT state.");
+                Property(serializedObject, "_maximumTrackedSurfaceBodies", "Maximum Tracked Surface Bodies", "Fixed logical Rigidbody2D capacity for the surface crossing trigger. Values are clamped to 1–16.");
+            });
+        }
+
         public static bool DrawAmbientBandField(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water25D Ambient Wave Bands", delegate
@@ -118,6 +127,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Wave Behaviour", false, DrawWaveBehaviourFields);
             DrawStandaloneSection(serializedObject, "Geometry", false, DrawGeometryFields);
             DrawStandaloneSection(serializedObject, "Surface Rings", false, DrawSurfaceRingFields);
+            DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
             DrawValidation(serializedObject, profile);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

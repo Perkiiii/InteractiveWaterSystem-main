@@ -1,40 +1,72 @@
-using System.Collections.Generic;
 using UnityEngine;
+using Water25D.Rendering;
 
 namespace Water25D
 {
     /// <summary>
-    /// Thin surface-crossing trigger. It tracks Rigidbody2D contacts rather than colliders
-    /// so multi-collider characters generate one logical entry and exit.
+    /// Thin surface-crossing trigger. Trigger callbacks only maintain logical membership;
+    /// qualified crossings and contact-foam samples are evaluated on the physics clock.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WaterSurfaceInteraction2D : MonoBehaviour
     {
-        private sealed class BodyContact
+        private enum SurfaceSide
         {
-            public Rigidbody2D Body;
-            public Collider2D FirstCollider;
-            public int ColliderCount;
+            Above,
+            Straddling,
+            Below,
+            Invalid
         }
 
-        private readonly List<BodyContact> _contacts = new List<BodyContact>(8);
+        private struct SurfaceBodyState
+        {
+            public Rigidbody2D Body;
+            public Collider2D RepresentativeCollider;
+            public int BodyKey;
+            public Bounds PreviousBounds;
+            public Bounds CurrentBounds;
+            public bool HasPreviousSample;
+            public SurfaceSide PreviousSurfaceSide;
+            public SurfaceSide CurrentSurfaceSide;
+            public bool DownwardCrossingEmitted;
+            public bool UpwardCrossingEmitted;
+            public Vector2 CurrentVelocity;
+        }
+
+        private readonly WaterLogicalBodyContactTracker _tracker = new WaterLogicalBodyContactTracker();
+        private readonly SurfaceBodyState[] _bodyStates = new SurfaceBodyState[WaterLogicalBodyContactTracker.CompileTimeMaximumLogicalBodies];
         private Water25DController _water;
         private LayerMask _solidInteractionLayers;
         private LayerMask _triggerInteractionLayers;
         private bool _includeTriggerColliders;
+        private float _crossingEpsilon = 0.02f;
+        private int _bodyStateCount;
 
-        public int LogicalContactCount => _contacts.Count;
+        public int LogicalContactCount => _tracker.LogicalBodyCount;
+        public int DroppedTrackedBodyCount => _tracker.DroppedBodyCount;
+        public int ColliderSampleOverflowCount => _tracker.ColliderOverflowCount;
+        public int MaximumTrackedBodies => _tracker.MaximumLogicalBodies;
 
         internal void Configure(
             Water25DController water,
             LayerMask solidInteractionLayers,
             LayerMask triggerInteractionLayers,
-            bool includeTriggerColliders)
+            bool includeTriggerColliders,
+            int maximumTrackedBodies,
+            float crossingEpsilon)
         {
+            if (_water != water)
+            {
+                _tracker.Clear();
+                ClearBodyStates();
+            }
+
             _water = water;
             _solidInteractionLayers = solidInteractionLayers;
             _triggerInteractionLayers = triggerInteractionLayers;
             _includeTriggerColliders = includeTriggerColliders;
+            _tracker.Configure(maximumTrackedBodies);
+            _crossingEpsilon = Mathf.Clamp(crossingEpsilon, 0.001f, 0.25f);
         }
 
         private void Awake()
@@ -45,6 +77,36 @@ namespace Water25D
             }
         }
 
+        private void FixedUpdate()
+        {
+            if (!isActiveAndEnabled || _water == null || !_water.isActiveAndEnabled)
+            {
+                return;
+            }
+
+            _tracker.CleanupInvalid();
+            RemoveStatesForUntrackedBodies();
+            for (var i = 0; i < _tracker.LogicalBodyCount; i++)
+            {
+                if (!_tracker.TryGetSampleAt(i, out var sample))
+                {
+                    continue;
+                }
+
+                var stateIndex = FindBodyState(sample.Body);
+                if (stateIndex < 0)
+                {
+                    stateIndex = AddBodyState(sample);
+                    if (stateIndex < 0)
+                    {
+                        continue;
+                    }
+                }
+
+                EvaluateBodySample(stateIndex, sample);
+            }
+        }
+
         private void OnTriggerEnter2D(Collider2D other)
         {
             if (!CanInteract(other))
@@ -52,48 +114,9 @@ namespace Water25D
                 return;
             }
 
-            var body = other.attachedRigidbody;
-            if (body == null)
-            {
-                return;
-            }
-
-            var contact = FindContact(body);
-            if (contact != null)
-            {
-                contact.ColliderCount++;
-                return;
-            }
-
-            contact = new BodyContact
-            {
-                Body = body,
-                FirstCollider = other,
-                ColliderCount = 1
-            };
-            _contacts.Add(contact);
-
-            var point = other.bounds.center;
-            var velocity = body.linearVelocity;
-            var strength = _water != null ? _water.CalculateImpactStrength(velocity) : 0f;
-            var eventData = new WaterInteractionEvent(
-                _water,
-                body,
-                other,
-                new Vector2(point.x, point.y),
-                velocity,
-                strength,
-                WaterInteractionEventType.SurfaceEnter);
-
-            if (_water != null)
-            {
-                _water.CreateSurfaceImpactAt(
-                    _water.GetInteractionWorldPosition(eventData.Position),
-                    strength,
-                    velocity.y >= 0f,
-                    _water.GetImpactRadius(velocity));
-                _water.NotifyInteraction(eventData);
-            }
+            // Membership is deliberately the only callback-side effect. Crossing decisions
+            // use aggregate bounds and Rigidbody2D velocity in FixedUpdate.
+            _tracker.TryAdd(other);
         }
 
         private void OnTriggerExit2D(Collider2D other)
@@ -103,56 +126,24 @@ namespace Water25D
                 return;
             }
 
-            var body = other.attachedRigidbody;
-            if (body == null)
-            {
-                return;
-            }
-
-            var contact = FindContact(body);
-            if (contact == null)
-            {
-                return;
-            }
-
-            contact.ColliderCount--;
-            if (contact.ColliderCount > 0)
-            {
-                return;
-            }
-
-            var point = other.bounds.center;
-            var velocity = body.linearVelocity;
-            var strength = _water != null ? _water.CalculateImpactStrength(velocity) : 0f;
-            RemoveContact(contact);
-
-            if (_water != null)
-            {
-                var eventData = new WaterInteractionEvent(
-                    _water,
-                    body,
-                    other,
-                    new Vector2(point.x, point.y),
-                    velocity,
-                    strength,
-                    WaterInteractionEventType.SurfaceExit);
-                _water.CreateSurfaceImpactAt(
-                    _water.GetInteractionWorldPosition(eventData.Position),
-                    strength,
-                    velocity.y >= 0f,
-                    _water.GetImpactRadius(velocity));
-                _water.NotifyInteraction(eventData);
-            }
+            _tracker.TryRemove(other);
         }
 
         private void OnDisable()
         {
-            _contacts.Clear();
+            ClearContacts();
+        }
+
+        internal void ClearContacts()
+        {
+            _tracker.Clear();
+            ClearBodyStates();
         }
 
         private bool CanInteract(Collider2D other)
         {
-            if (!isActiveAndEnabled || _water == null || other == null)
+            if (!isActiveAndEnabled || _water == null || !_water.isActiveAndEnabled ||
+                other == null || other.attachedRigidbody == null)
             {
                 return false;
             }
@@ -166,30 +157,278 @@ namespace Water25D
             return (mask.value & (1 << other.gameObject.layer)) != 0;
         }
 
-        private BodyContact FindContact(Rigidbody2D body)
+        private int AddBodyState(WaterSurfaceContactSample sample)
         {
-            for (var i = 0; i < _contacts.Count; i++)
+            if (_bodyStateCount >= _bodyStates.Length)
             {
-                if (_contacts[i].Body == body)
-                {
-                    return _contacts[i];
-                }
+                return -1;
             }
 
-            return null;
+            var velocity = GetFiniteVelocity(sample.Body);
+            var estimatedPreviousBounds = sample.AggregateBounds;
+            estimatedPreviousBounds.center -= new Vector3(
+                velocity.x * Time.fixedDeltaTime,
+                velocity.y * Time.fixedDeltaTime,
+                0f);
+            var stateIndex = _bodyStateCount++;
+            _bodyStates[stateIndex] = new SurfaceBodyState
+            {
+                Body = sample.Body,
+                RepresentativeCollider = sample.RepresentativeCollider,
+                BodyKey = sample.BodyKey,
+                PreviousBounds = estimatedPreviousBounds,
+                CurrentBounds = sample.AggregateBounds,
+                HasPreviousSample = true,
+                PreviousSurfaceSide = ClassifySurfaceSide(estimatedPreviousBounds),
+                CurrentSurfaceSide = ClassifySurfaceSide(sample.AggregateBounds),
+                CurrentVelocity = velocity
+            };
+
+            // The bounded initial estimate may prove a moving edge crossed the line while the
+            // callback was being delivered. A stationary body merely discovered straddling the
+            // trigger never emits a synthetic crossing.
+            EvaluateCrossing(stateIndex, estimatedPreviousBounds, sample.AggregateBounds, velocity, true, sample);
+            return stateIndex;
         }
 
-        private void RemoveContact(BodyContact contact)
+        private void EvaluateBodySample(int stateIndex, WaterSurfaceContactSample sample)
         {
-            var index = _contacts.IndexOf(contact);
-            if (index < 0)
+            var state = _bodyStates[stateIndex];
+            var previousBounds = state.CurrentBounds;
+            var velocity = GetFiniteVelocity(sample.Body);
+            state.PreviousBounds = previousBounds;
+            state.CurrentBounds = sample.AggregateBounds;
+            state.PreviousSurfaceSide = state.CurrentSurfaceSide;
+            state.CurrentSurfaceSide = ClassifySurfaceSide(sample.AggregateBounds);
+            state.RepresentativeCollider = sample.RepresentativeCollider;
+            state.CurrentVelocity = velocity;
+            state.HasPreviousSample = true;
+            _bodyStates[stateIndex] = state;
+
+            EvaluateCrossing(stateIndex, previousBounds, sample.AggregateBounds, velocity, false, sample);
+            UpdateContactFoam(sample, velocity);
+
+            state = _bodyStates[stateIndex];
+            if (state.CurrentSurfaceSide == SurfaceSide.Above)
+            {
+                state.DownwardCrossingEmitted = false;
+                state.UpwardCrossingEmitted = false;
+            }
+            else if (state.CurrentSurfaceSide == SurfaceSide.Below)
+            {
+                state.UpwardCrossingEmitted = false;
+            }
+
+            _bodyStates[stateIndex] = state;
+        }
+
+        private void EvaluateCrossing(
+            int stateIndex,
+            Bounds previousBounds,
+            Bounds currentBounds,
+            Vector2 velocity,
+            bool isInitialEstimate,
+            WaterSurfaceContactSample sample)
+        {
+            if (_water == null || !IsFinite(velocity) ||
+                !IsFinite(previousBounds) || !IsFinite(currentBounds))
             {
                 return;
             }
 
-            var lastIndex = _contacts.Count - 1;
-            _contacts[index] = _contacts[lastIndex];
-            _contacts.RemoveAt(lastIndex);
+            var state = _bodyStates[stateIndex];
+            var waterline = _water.WaterlineWorldY;
+            var downward = previousBounds.min.y > waterline + _crossingEpsilon &&
+                           currentBounds.min.y <= waterline + _crossingEpsilon &&
+                           currentBounds.min.y < previousBounds.min.y &&
+                           velocity.y < 0f &&
+                           !state.DownwardCrossingEmitted;
+            var upward = previousBounds.max.y < waterline - _crossingEpsilon &&
+                         currentBounds.max.y >= waterline - _crossingEpsilon &&
+                         currentBounds.max.y > previousBounds.max.y &&
+                         velocity.y > 0f &&
+                         !state.UpwardCrossingEmitted;
+
+            if (isInitialEstimate)
+            {
+                var previousSide = ClassifySurfaceSide(previousBounds);
+                var currentSide = ClassifySurfaceSide(currentBounds);
+                if (previousSide == currentSide)
+                {
+                    downward = false;
+                    upward = false;
+                }
+            }
+
+            if (downward)
+            {
+                state.DownwardCrossingEmitted = true;
+                _bodyStates[stateIndex] = state;
+                EmitQualifiedCrossing(sample, velocity, WaterInteractionEventType.SurfaceEnter);
+            }
+            else if (upward)
+            {
+                state.UpwardCrossingEmitted = true;
+                _bodyStates[stateIndex] = state;
+                EmitQualifiedCrossing(sample, velocity, WaterInteractionEventType.SurfaceExit);
+            }
+        }
+
+        private void EmitQualifiedCrossing(
+            WaterSurfaceContactSample sample,
+            Vector2 velocity,
+            WaterInteractionEventType eventType)
+        {
+            if (_water == null)
+            {
+                return;
+            }
+
+            var strength = _water.CalculateImpactStrength(velocity);
+            var eventPosition = new Vector2(sample.AggregateBounds.center.x, _water.WaterlineWorldY);
+            var eventData = new WaterInteractionEvent(
+                _water,
+                sample.Body,
+                sample.RepresentativeCollider,
+                eventPosition,
+                velocity,
+                strength,
+                eventType);
+
+            var initialUp = eventType == WaterInteractionEventType.SurfaceExit;
+            _water.CreateSurfaceImpactAt(
+                _water.GetInteractionWorldPosition(eventPosition),
+                strength,
+                initialUp,
+                _water.GetImpactRadius(velocity));
+            _water.NotifyInteraction(eventData);
+        }
+
+        private void UpdateContactFoam(WaterSurfaceContactSample sample, Vector2 velocity)
+        {
+            if (_water == null || _water.SurfaceMode != WaterSurfaceMode.FlatStylized)
+            {
+                return;
+            }
+
+            var bounds = sample.AggregateBounds;
+            var waterline = _water.WaterlineWorldY;
+            var straddlesWaterline = bounds.min.y <= waterline && bounds.max.y >= waterline;
+            if (!straddlesWaterline || bounds.size.y <= 0f)
+            {
+                _water.ReleaseSurfaceContactFoam(sample.BodyKey);
+                return;
+            }
+
+            var submersion01 = Mathf.InverseLerp(bounds.min.y, bounds.max.y, waterline);
+            _water.UpdateSurfaceContactFoam(
+                sample.BodyKey,
+                new Vector2(bounds.center.x, waterline),
+                bounds.size.x,
+                submersion01,
+                1f);
+        }
+
+        private void RemoveStatesForUntrackedBodies()
+        {
+            for (var i = _bodyStateCount - 1; i >= 0; i--)
+            {
+                var body = _bodyStates[i].Body;
+                if (_tracker.ContainsBody(body))
+                {
+                    continue;
+                }
+
+                _water?.ReleaseSurfaceContactFoam(_bodyStates[i].BodyKey);
+                RemoveBodyStateAt(i);
+            }
+        }
+
+        private int FindBodyState(Rigidbody2D body)
+        {
+            for (var i = 0; i < _bodyStateCount; i++)
+            {
+                if (_bodyStates[i].Body == body)
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private void RemoveBodyStateAt(int index)
+        {
+            var lastIndex = _bodyStateCount - 1;
+            if (index != lastIndex)
+            {
+                _bodyStates[index] = _bodyStates[lastIndex];
+            }
+
+            _bodyStates[lastIndex] = default;
+            _bodyStateCount = lastIndex;
+        }
+
+        private void ClearBodyStates()
+        {
+            for (var i = 0; i < _bodyStates.Length; i++)
+            {
+                _bodyStates[i] = default;
+            }
+
+            _bodyStateCount = 0;
+        }
+
+        private SurfaceSide ClassifySurfaceSide(Bounds bounds)
+        {
+            if (!IsFinite(bounds))
+            {
+                return SurfaceSide.Invalid;
+            }
+
+            var waterline = _water != null ? _water.WaterlineWorldY : 0f;
+            if (bounds.min.y > waterline + _crossingEpsilon)
+            {
+                return SurfaceSide.Above;
+            }
+
+            if (bounds.max.y < waterline - _crossingEpsilon)
+            {
+                return SurfaceSide.Below;
+            }
+
+            return SurfaceSide.Straddling;
+        }
+
+        private static Vector2 GetFiniteVelocity(Rigidbody2D body)
+        {
+            if (body == null)
+            {
+                return Vector2.zero;
+            }
+
+            var velocity = body.linearVelocity;
+            return IsFinite(velocity) ? velocity : Vector2.zero;
+        }
+
+        private static bool IsFinite(Bounds bounds)
+        {
+            return IsFinite(bounds.min) && IsFinite(bounds.max);
+        }
+
+        private static bool IsFinite(Vector2 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y);
+        }
+
+        private static bool IsFinite(Vector3 value)
+        {
+            return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

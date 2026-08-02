@@ -93,8 +93,7 @@ Exact files changed for the flat-stylized migration foundation slice:
 - Added lightweight MPB uploads that read each renderer's existing block and update only `_WaterRingCount`, `_WaterRingsA`, and `_WaterRingsB`. Full authoring applies initialize zero ring data, while transient updates preserve style, CRT, mode, reflection, and unrelated instance properties.
 - Extended the existing top and front passes with bounded 16-entry annulus evaluation. The top blends a fading expanding ring toward `_FoamColor` without vertex displacement. The front evaluates the same ring at local Z = 0 in a narrow top seam band and only shows it once the radius reaches the front plane.
 - Reused the existing `TestPlayer` Rigidbody2D/collider already present in `Water25D_VisualFlat` for Play Mode impact routing. No sample driver or scene serialization change was needed, and `Water25D_VisualValidation.unity` was not modified.
-- The existing interaction component still has known incomplete side-entry and below-surface crossing qualification; this slice routes its accepted events but does not correct those semantics. No architectural deviation from the controller/module ownership model was introduced.
-- Crossing qualification, logical-body contact tracking, contact foam, wakes, splash redesign, ring-derived normals, reflection distortion, Fresnel changes, and final reflection tuning remain intentionally unimplemented.
+- The ring slice intentionally left crossing qualification, logical-body contact tracking, and contact foam for the bounded slice recorded below. Wakes, splash redesign, ring-derived normals, reflection distortion, Fresnel changes, and final reflection tuning remain follow-up work.
 
 Exact files changed for the procedural surface ring slice:
 
@@ -115,6 +114,46 @@ Exact files changed for the procedural surface ring slice:
 - `Assets/Water25D/Tests/PlayMode/WaterControllerPlayModeTests.cs`.
 - `Assets/Water25D/Documentation/STATUS.md`.
 
+### Qualified surface crossings, logical-body tracking, and contact foam slice
+
+- Corrected `CreateSurfaceImpactAt(...)` so omitted, non-finite, zero, and negative radii resolve once to the sanitized quality-profile impact radius before either the FlatStylized ring path or the SimulatedRipples CRT queue. Positive radii remain supported and are safely clamped to 0.005–10 world units. Existing `CreateContactRippleAt(...)` overloads remain source-compatible.
+- Hardened `RingExpansionMultiplier` to a minimum of 1.0 in the style settings, profile annotation, presentation sanitization, and tests; existing ring defaults remain unchanged.
+- Added the internal fixed-capacity `WaterLogicalBodyContactTracker` and `WaterSurfaceContactSample`. Each crossing trigger and buoyancy volume owns its own 16-body-capacity tracker, with a quality-controlled active limit, up to eight sampled colliders per body, aggregate bounds, deterministic indexed access, invalid-reference cleanup, final-collider release, overflow diagnostics, dropped-body diagnostics, and no per-contact class allocation or dynamic collection growth.
+- Unity `6000.5.4f1` treats `GetInstanceID()` as an obsolete-as-error API, so the stable runtime body key is derived from `Rigidbody2D.GetEntityId().GetHashCode()` instead. This is the only deliberate identity-API deviation from the requested example.
+- Surface trigger callbacks now only maintain logical membership. `FixedUpdate` samples aggregate bounds and Rigidbody2D velocity, uses the actual world waterline and a sanitized 0.02-unit default hysteresis epsilon, estimates the first previous sample from `-linearVelocity * fixedDeltaTime`, and emits at most one qualified downward `SurfaceEnter` or upward `SurfaceExit` event/impact per crossing. Horizontal side entry, stationary initial straddling, and below-surface entry do not synthesize a surface event. Event X uses the aggregate body centre and event Y is the exact waterline.
+- Added fixed-capacity body-keyed contact foam to `WaterSurfacePresentationModule`: eight compile-time shader slots, four default active slots, stable per-body noise phase, aggregate-centre/width/submersion updates, controlled fading, same-key revival, oldest-fading reclamation, active-slot protection, and dropped-contact diagnostics. Foam is uploaded with the existing top/front draws and creates no GameObjects or extra render objects.
+- Added quality settings for four default contact foams and eight tracked surface bodies, excluded from `SimulationEquals` but included in full equality/hash behavior. Added the six style settings for foam width padding, half depth, softness, intensity, fade duration, and reflection occlusion with sanitization and equality/hash participation. Existing profile asset files were not changed by this slice.
+- Added fixed render-data arrays and MPB uploads for `_WaterFoamCount`, `_WaterFoamsA`, and `_WaterFoamsB`. Lightweight uploads preserve each renderer's existing rings, reflection state, surface mode, and unrelated properties; simulated mode uploads zero procedural foam count. Top and front shaders evaluate bounded analytic ellipse foam only in FlatStylized; the top mask suppresses reflection, while the front contribution exists only where the ellipse reaches local Z=0.
+- Controller coordination maps contact samples into the configured interaction-depth lane, rejects invalid/outside contact centres, clears foam and trackers on mode/resize/disable/destroy paths, and leaves qualified crossings routed to CRT impacts in SimulatedRipples. Rings remain separate and unchanged in ownership and replacement policy.
+
+Exact files changed for this bounded slice:
+
+- `Assets/Water25D/Runtime/Physics/WaterLogicalBodyContactTracker.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Runtime/Physics/WaterSurfaceContactSample.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Runtime/Water25D.RuntimeAssemblyInfo.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Runtime/Core/Water25DController.cs`.
+- `Assets/Water25D/Runtime/Core/WaterRenderingModule.cs`.
+- `Assets/Water25D/Runtime/Physics/WaterPhysicsModule.cs`.
+- `Assets/Water25D/Runtime/Physics/WaterPhysicsVolume2D.cs`.
+- `Assets/Water25D/Runtime/Physics/WaterSurfaceInteraction2D.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterShaderIds.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfacePresentationModule.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfaceRenderData.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterQualityProfile.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterStyleProfile.cs`.
+- `Assets/Water25D/Editor/Water25DEditor.cs`.
+- `Assets/Water25D/Editor/WaterQualityProfileEditor.cs`.
+- `Assets/Water25D/Editor/WaterStyleProfileEditor.cs`.
+- `Assets/Water25D/Shaders/Water25D_TopSurface.shader`.
+- `Assets/Water25D/Shaders/Water25D_FrontSurface.shader`.
+- `Assets/Water25D/Tests/EditMode/WaterLogicalBodyContactTrackerTests.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Tests/EditMode/WaterControllerEditModeTests.cs`.
+- `Assets/Water25D/Tests/EditMode/WaterSurfacePresentationTests.cs`.
+- `Assets/Water25D/Tests/PlayMode/WaterControllerPlayModeTests.cs`.
+- `Assets/Water25D/Documentation/STATUS.md`.
+
+No sample scene, profile asset, material asset, prefab, package manifest, project setting, legacy/reference-system file, or original validation scene was changed by this bounded slice. The working tree still contains pre-existing user changes to `Water25D_DefaultStyle.asset` and `Water25D_VisualFlat.unity`; they were preserved.
+
 No sample scene, profile asset, material asset, prefab, package manifest, project setting, or legacy/reference-system file was changed for this slice.
 
 ## Package boundaries
@@ -129,8 +168,11 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - Historical foundation validation before the ring slice: `Water25D.Tests.EditMode`, 36 total, 36 passed, 0 failed, 0 skipped; `Water25D.Tests.PlayMode`, 2 total, 2 passed, 0 failed, 0 skipped.
 - Current complete EditMode run through Unity MCP job `7bb323d27e124a0cb323e2dc98174973`: `Water25D.Tests.EditMode`, 47 total, 47 passed, 0 failed, 0 skipped, result state `Passed`.
 - Current complete PlayMode run through Unity MCP job `ce419f1808ae44c39482dfbd54253637`: `Water25D.Tests.PlayMode`, 3 total, 3 passed, 0 failed, 0 skipped, result state `Passed`.
+- Final complete EditMode run through Unity MCP job `dfad4ae01fe7466692d3ab9f05e6d231`: `Water25D.Tests.EditMode`, 55 total, 55 passed, 0 failed, 0 skipped, result state `Passed`.
+- Final complete PlayMode run through Unity MCP job `588b3087eaa345f685719315a65241f4`: `Water25D.Tests.PlayMode`, 9 total, 9 passed, 0 failed, 0 skipped, result state `Passed`.
+- The final refresh/compile completed before the two final suites; the changed shader materials remained supported and the new foam shader-property assertions passed. The only console entries after testing were Unity Test Runner result-save/performance-cleanup messages and an MCP WebSocket warning; no Water25D compiler or shader error was observed.
 - The completed EditMode run ended with the Unity editor idle, ready for tools, not compiling, and not in Play Mode. Console inspection returned no errors or warnings; only the Test Runner result-save and performance-cleanup log entries were present.
-- A later PlayMode relaunch after the profile-default test timed out in the Unity MCP initialization/transport layer and returned no test result; it is not counted as a pass or failure. The completed PlayMode job above remains valid because the post-run source change only added an EditMode test.
+- A later PlayMode relaunch after final hardening timed out in the Unity MCP initialization/transport layer and returned no test result; it is not counted as a pass or failure. The 9/9 PlayMode job above is the last completed PlayMode run. The subsequent changes were a minor invalid-radius fallback, removal of an unused field, and additional EditMode assertions; the final EditMode run passed 55/55, but the Unity transport did not complete a later PlayMode rerun.
 - Unity shader compiler log entries for the changed top and front shaders completed with `ok=1`; no shader compilation error was observed.
 - Visual validation scene: `Assets/Water25D/Samples/Water25D_VisualValidation.unity`. Unity inspection confirmed persistent materials on both renderers, all five default controller asset references, and `{fileID: 0}` generated mesh slots after save. The [persistent-material capture](Validation/water25d-persistent-materials.png) shows the saved scene rendering without magenta error output.
 - In Play Mode, `CreateContactRippleAt` returned `true`; after a subsequent Unity frame, GPU readback of the 320 x 104 RGHalf state contained 132,848 nonzero bytes out of 133,120. This confirms impact state reached the CRT. A final target-device visual ripple comparison has not been claimed.
@@ -140,13 +182,14 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - The scene scaffold was saved through the connected Unity Editor after locating `Water25D_VisualFlat` by asset name. The original `Water25D_VisualValidation.unity` was not modified.
 - `Water25D_VisualFlat.unity.meta` has GUID `2db428c6b97345c4f9d7706316fedd19`, distinct from the source scene GUID `f649cad0f7c3d6844b77164df4d889c5`; the duplicated scenes retain identical dependency GUID sets.
 - Static YAML validation confirmed the retained `SimulatedRipples` baseline, `Water25D_FlatTest` as `FlatStylized`, no zero script, GameObject, profile, or material references, and only the expected runtime-generated mesh slots with `{fileID: 0}`.
-- Final repository validation passed `git diff --check`; legacy reference trees, the original validation scene, and unrelated project settings are clean. Unity-generated temporary scene/project-setting serialization was restored before this final audit.
+- The tracked package diff passed `git diff --check` when the preserved dirty `Assets/Water25D/Samples/Water25D_VisualFlat.unity` scene was excluded. The full working-tree check reports eight pre-existing trailing `m_Name: ` lines in that user-modified scene; they were preserved. Legacy reference trees, the original validation scene, and unrelated project settings are clean. Unity-generated temporary scene/project-setting serialization was restored before this final audit.
 - For the flat geometry and shader-contract slice, the live Unity `6000.5.4f1` Editor had previously refreshed and recompiled the package, then ran the complete source suites with no failures or skips. The current ring-slice run above also retained those tests.
 - Structural assertions covered the four-vertex flat top/front meshes, bounds, corner UVs, normals/winding, fixed waterline edge, visual-depth-only top rebuild, mode-switch mesh disposal, MPB `_SurfaceMode`, flat CRT absence, and simulated tessellation/CRT retention.
-- `git diff --check` passed after the final source and documentation changes. `git status --short` was inspected; no final `ProjectSettings`, `Packages`, legacy reference-tree, source validation-scene, material, profile, prefab, or tracked `.meta` changes belong to this slice.
+- The tracked package diff passed `git diff --check` after the final source and documentation changes, excluding the preserved dirty sample scene. `git status --short` was inspected; no final `ProjectSettings`, `Packages`, legacy reference-tree, source validation-scene, material, profile, prefab, or tracked `.meta` changes belong to this slice.
 - `rg -n "Cainos|InteractiveWaterSystem|DemoScenes|Lucid" Assets/Water25D` returned documentation-only audit/portability matches; no package runtime or editor code dependency was introduced.
-- `git diff --check` passed after the ring implementation and status update. `git status --short` showed only the listed Water25D source, shader, editor, test, generated-new-asset-meta, and documentation files.
+- The ring/source portion of the tracked diff passed `git diff --check`; the full check remains limited by the eight preserved trailing-whitespace lines in the user-modified sample scene. `git status --short` showed only the listed Water25D source, shader, editor, test, generated-new-asset-meta, documentation, and pre-existing user scene/profile changes.
 - The repository branch contains the inspected baseline commit `ece5fe9c6df3ccc6a220095816622d3e5670c4d5` as an ancestor; no reset or rollback was performed.
+- The requested baseline commit `d3235e71a427ddd31c35b7484ab93dc671494f2c` is present as an ancestor of the current revision; no reset or rollback was performed.
 - The requested Water25D-specific `Assets/Water25D/Documentation/IMPLEMENTATION_PLAN.md` path does not exist in this repository. The existing repository-level plan at `Assets/Docs/IMPLEMENTATION_PLAN.md` and the flat-stylized plan were used instead.
 
 ## Not completed
@@ -161,6 +204,7 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - A post-correction capture of the six collapsed top-level bars has not yet been produced.
 - Full multi-selection/prefab-stage authoring review, measured profiler capture, and target-device validation remain outstanding.
 - Gameplay-camera-aware visibility scheduling and vertical-crossing-weighted impact strength remain follow-up work.
+- Distance-based wakes, wake segments, splash entry/exit variants, splash size tiers, and new splash assets remain intentionally unimplemented.
 - Automatic project layer, sorting-layer, URP renderer-feature, or Camera Sorting Layer Texture setup.
 
 ### Flat-mode manual validation still required
@@ -194,6 +238,15 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - Inspect the ring fields in shared-profile and unique-copy workflows, exercise Undo/Redo, save/close/reopen the scene, and confirm no missing references, pink materials, shader errors, or new Console errors.
 - No manual visual, Frame Debugger, profiler, clean-project import, or target-device verification was performed for procedural rings; automated tests covered lifecycle, routing, fixed storage, MPB preservation, and shader data shape only.
 
+### Qualified-crossing and contact-foam manual validation still required
+
+- Open `Assets/Water25D/Samples/Water25D_VisualFlat.unity` and use the existing `TestPlayer` to verify one downward entry and one upward exit event, impact, ring, and existing splash response in FlatStylized; verify the simulated baseline receives a CRT impact instead of a ring.
+- Verify side entry and entry from below produce no qualified surface crossing, ring, CRT impact, or splash; a side-entering body may still show one body-keyed foam patch while it genuinely straddles the waterline.
+- Let a multi-collider body rest across the waterline and confirm one persistent foam patch follows its aggregate centre/width without repeated crossings; confirm fully submerged and fully above states fade foam rather than removing it abruptly.
+- Confirm front foam appears only when the ellipse reaches the front plane, reflection is reduced beneath foam, rings remain independent, and FlatStylized geometry stays straight.
+- Exercise mode switching, resize, disable/re-enable, save/reopen, and Undo/Redo; confirm foam and trackers clear without creating hierarchy children, renderers, meshes, particles, or materials.
+- No manual visual, Frame Debugger, profiler, clean-project import, or target-device verification was performed for qualified crossings or contact foam; automated structural and behavioral tests are recorded above.
+
 ## Known setup requirements
 
 Project-level rendering and sorting configuration is intentionally not modified by the package. Follow `SETUP.md` and `PORTABILITY.md` when moving the package to another project.
@@ -203,7 +256,7 @@ Project-level rendering and sorting configuration is intentionally not modified 
 The active flat-stylized redesign milestone was advanced by this bounded slice but is not complete. The next bounded task is:
 
 ```text
-Implement qualified top-surface crossing detection, reusable logical-body contact tracking, and body-keyed contact foam while preserving procedural rings and simulated CRT behavior.
+Implement fixed-capacity distance-spaced wake segments for qualified moving surface contacts, preserving rings, contact foam, and simulated CRT behavior.
 ```
 
 Full prefab-stage, multi-selection, clean-project portability, measured profiling, target-device validation, and the remaining flat presentation features remain follow-up work.

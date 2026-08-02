@@ -218,12 +218,14 @@ namespace Water25D.Editor
                 {
                     DrawSharedProfileNotice(qualityProfile, false);
                     DrawNestedQualitySection(_qualityProfileSerializedObject, "Surface Rings", "Rendering.ContactRipples.SurfaceRings", WaterQualityProfileEditor.DrawSurfaceRingFields);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Contact Foam", "Rendering.ContactRipples.ContactFoam", WaterQualityProfileEditor.DrawContactFoamFields);
                 }
 
                 if (styleProfile != null && _styleProfileSerializedObject != null)
                 {
                     DrawSharedProfileNotice(styleProfile, true);
                     WaterStyleProfileEditor.DrawRingFields(_styleProfileSerializedObject);
+                    WaterStyleProfileEditor.DrawContactFoamFields(_styleProfileSerializedObject);
                 }
 
                 var flatController = target as Water25DController;
@@ -234,6 +236,18 @@ namespace Water25D.Editor
                         : WaterQualitySettings.Default.MaximumSurfaceRings);
                     Metric("Runtime Active Rings", flatController.ActiveSurfaceRingCount);
                     Metric("Runtime Replacements", flatController.ReplacedSurfaceRingCount);
+                    Metric("Tracked logical surface bodies", flatController.TrackedSurfaceBodyCount);
+                    Metric("Dropped tracked bodies", flatController.DroppedTrackedSurfaceBodyCount);
+                    Metric("Active contact foams", flatController.ActiveContactFoamCount);
+                    Metric("Fading contact foams", flatController.FadingContactFoamCount);
+                    Metric("Dropped contact foams", flatController.DroppedContactFoamCount);
+                    Metric("Maximum contact foams", qualityProfile != null
+                        ? qualityProfile.GetSettings().MaximumContactFoams
+                        : WaterQualitySettings.Default.MaximumContactFoams);
+                    Metric("Maximum tracked bodies", qualityProfile != null
+                        ? qualityProfile.GetSettings().MaximumTrackedSurfaceBodies
+                        : WaterQualitySettings.Default.MaximumTrackedSurfaceBodies);
+                    Metric("Crossing epsilon", flatController.SurfaceCrossingEpsilon.ToString("0.###"));
                 }
             }
             else
@@ -329,6 +343,7 @@ namespace Water25D.Editor
                 Property("_surfaceInteractionLayers", "Surface Interaction Layers", "Non-trigger collider layers eligible for surface crossings and contact ripples.");
                 Property("_surfaceTriggerInteractionLayers", "Trigger Interaction Layers", "Trigger collider layers eligible for surface crossings when trigger colliders are included.");
                 Property("_includeTriggerCollidersInSurfaceInteraction", "Include Trigger Colliders", "Allow eligible trigger colliders to produce one logical surface contact per Rigidbody2D.");
+                Property("_surfaceCrossingEpsilon", "Crossing Epsilon", "Small world-unit hysteresis around the waterline used to qualify vertical surface crossings.");
             }
 
             EndTopLevelSection();

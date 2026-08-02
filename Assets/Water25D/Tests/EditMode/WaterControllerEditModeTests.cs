@@ -62,6 +62,11 @@ namespace Water25D.Tests
             Assert.AreEqual("Water25D/Top Surface", top.shader.name);
             Assert.AreEqual("Water25D/Front Surface", front.shader.name);
             Assert.AreEqual("Water25D/Ripple Simulation", ripple.shader.name);
+            Assert.IsTrue(top.HasProperty("_WaterFoamCount"));
+            Assert.IsTrue(top.HasProperty("_WaterFoamSoftness"));
+            Assert.IsTrue(top.HasProperty("_FoamReflectionOcclusion"));
+            Assert.IsTrue(front.HasProperty("_WaterFoamCount"));
+            Assert.IsTrue(front.HasProperty("_WaterFoamSoftness"));
         }
 
         [Test]

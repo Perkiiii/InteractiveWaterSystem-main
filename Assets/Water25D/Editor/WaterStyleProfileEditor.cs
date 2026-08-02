@@ -59,6 +59,19 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawContactFoamFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water Style Contact Foam", delegate
+            {
+                Property(serializedObject, "_contactFoamWidthPadding", "Width Padding", "Additional local-X width around the aggregate logical-body contact.");
+                Property(serializedObject, "_contactFoamHalfDepth", "Half Depth", "Local-Z half depth of the analytic contact ellipse.");
+                Property(serializedObject, "_contactFoamSoftness", "Softness", "Normalized edge softness of the analytic contact ellipse.");
+                Property(serializedObject, "_contactFoamIntensity", "Intensity", "Maximum contact-foam contribution before per-slot intensity and fade.");
+                Property(serializedObject, "_contactFoamFadeDuration", "Fade Duration", "Seconds for a released contact-foam slot to fade to zero.");
+                Property(serializedObject, "_foamReflectionOcclusion", "Reflection Occlusion", "How strongly contact foam suppresses reflection beneath its mask.");
+            });
+        }
+
         public static bool DrawMaterialFields(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water Style Material Templates", delegate
@@ -157,6 +170,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Ambient Waves", true, DrawAmbientFields);
             DrawStandaloneSection(serializedObject, "Contact Ripples", false, DrawRippleFields);
             DrawStandaloneSection(serializedObject, "Procedural Surface Rings", false, DrawRingFields);
+            DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
             DrawStandaloneSection(serializedObject, "Material Templates", false, DrawMaterialFields);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

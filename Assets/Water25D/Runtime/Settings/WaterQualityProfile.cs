@@ -21,6 +21,8 @@ namespace Water25D
         public float TopVerticesPerUnit;
         public int AmbientWaveBands;
         public int MaximumSurfaceRings;
+        public int MaximumContactFoams;
+        public int MaximumTrackedSurfaceBodies;
 
         public static WaterQualitySettings Default => new WaterQualitySettings
         {
@@ -38,7 +40,9 @@ namespace Water25D
             IdleTimeout = 2f,
             TopVerticesPerUnit = 8f,
             AmbientWaveBands = 3,
-            MaximumSurfaceRings = 8
+            MaximumSurfaceRings = 8,
+            MaximumContactFoams = 4,
+            MaximumTrackedSurfaceBodies = 8
         };
 
         public void Sanitize()
@@ -60,6 +64,8 @@ namespace Water25D
             TopVerticesPerUnit = Mathf.Clamp(TopVerticesPerUnit, 0.5f, 64f);
             AmbientWaveBands = Mathf.Clamp(AmbientWaveBands, 1, 4);
             MaximumSurfaceRings = Mathf.Clamp(MaximumSurfaceRings, 1, 16);
+            MaximumContactFoams = Mathf.Clamp(MaximumContactFoams, 1, 8);
+            MaximumTrackedSurfaceBodies = Mathf.Clamp(MaximumTrackedSurfaceBodies, 1, 16);
         }
 
         public Vector2Int CalculateRippleResolution(Vector2 topSurfaceSize)
@@ -92,7 +98,9 @@ namespace Water25D
         {
             return SimulationEquals(other) &&
                    Mathf.Approximately(TopVerticesPerUnit, other.TopVerticesPerUnit) &&
-                   MaximumSurfaceRings == other.MaximumSurfaceRings;
+                   MaximumSurfaceRings == other.MaximumSurfaceRings &&
+                   MaximumContactFoams == other.MaximumContactFoams &&
+                   MaximumTrackedSurfaceBodies == other.MaximumTrackedSurfaceBodies;
         }
 
         public override bool Equals(object obj)
@@ -118,7 +126,9 @@ namespace Water25D
                 hash = hash * 31 + IdleTimeout.GetHashCode();
                 hash = hash * 31 + TopVerticesPerUnit.GetHashCode();
                 hash = hash * 31 + AmbientWaveBands;
-                return hash * 31 + MaximumSurfaceRings;
+                hash = hash * 31 + MaximumSurfaceRings;
+                hash = hash * 31 + MaximumContactFoams;
+                return hash * 31 + MaximumTrackedSurfaceBodies;
             }
         }
     }
@@ -148,6 +158,10 @@ namespace Water25D
         [Header("Procedural Surface Rings")]
         [Range(1, 16)] [SerializeField] private int _maximumSurfaceRings = 8;
 
+        [Header("Flat-Stylized Interaction")]
+        [Range(1, 8)] [SerializeField] private int _maximumContactFoams = 4;
+        [Range(1, 16)] [SerializeField] private int _maximumTrackedSurfaceBodies = 8;
+
         [Header("Geometry")]
         [Min(0.5f)] [SerializeField] private float _topVerticesPerUnit = 8f;
 
@@ -171,7 +185,13 @@ namespace Water25D
                 AmbientWaveBands = _ambientWaveBands,
                 MaximumSurfaceRings = _maximumSurfaceRings > 0
                     ? _maximumSurfaceRings
-                    : WaterQualitySettings.Default.MaximumSurfaceRings
+                    : WaterQualitySettings.Default.MaximumSurfaceRings,
+                MaximumContactFoams = _maximumContactFoams > 0
+                    ? _maximumContactFoams
+                    : WaterQualitySettings.Default.MaximumContactFoams,
+                MaximumTrackedSurfaceBodies = _maximumTrackedSurfaceBodies > 0
+                    ? _maximumTrackedSurfaceBodies
+                    : WaterQualitySettings.Default.MaximumTrackedSurfaceBodies
             };
             settings.Sanitize();
             return settings;
@@ -195,6 +215,8 @@ namespace Water25D
             _topVerticesPerUnit = settings.TopVerticesPerUnit;
             _ambientWaveBands = settings.AmbientWaveBands;
             _maximumSurfaceRings = settings.MaximumSurfaceRings;
+            _maximumContactFoams = settings.MaximumContactFoams;
+            _maximumTrackedSurfaceBodies = settings.MaximumTrackedSurfaceBodies;
         }
     }
 }

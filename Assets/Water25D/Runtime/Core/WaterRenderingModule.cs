@@ -77,7 +77,10 @@ namespace Water25D
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionEnabled, 0f);
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionFallback, reflectionMode == WaterReflectionMode.Stylized ? 1f : 0f);
             _propertyBlock.SetFloat(WaterShaderIds.ReflectionStrength, reflectionStrength);
-            ApplySurfacePresentationToBlock(_propertyBlock, surfacePresentationData);
+            ApplySurfacePresentationToBlock(
+                _propertyBlock,
+                surfacePresentationData,
+                surfaceMode == WaterSurfaceMode.FlatStylized);
             topRenderer.SetPropertyBlock(_propertyBlock);
             frontRenderer.SetPropertyBlock(_propertyBlock);
         }
@@ -90,18 +93,22 @@ namespace Water25D
         public void ApplySurfacePresentation(
             MeshRenderer topRenderer,
             MeshRenderer frontRenderer,
-            WaterSurfaceRenderData renderData)
+            WaterSurfaceRenderData renderData,
+            bool includeContactFoam)
         {
             if (renderData == null)
             {
                 return;
             }
 
-            ApplySurfacePresentation(topRenderer, renderData);
-            ApplySurfacePresentation(frontRenderer, renderData);
+            ApplySurfacePresentation(topRenderer, renderData, includeContactFoam);
+            ApplySurfacePresentation(frontRenderer, renderData, includeContactFoam);
         }
 
-        private void ApplySurfacePresentation(MeshRenderer renderer, WaterSurfaceRenderData renderData)
+        private void ApplySurfacePresentation(
+            MeshRenderer renderer,
+            WaterSurfaceRenderData renderData,
+            bool includeContactFoam)
         {
             if (renderer == null)
             {
@@ -109,11 +116,14 @@ namespace Water25D
             }
 
             renderer.GetPropertyBlock(_propertyBlock);
-            ApplySurfacePresentationToBlock(_propertyBlock, renderData);
+            ApplySurfacePresentationToBlock(_propertyBlock, renderData, includeContactFoam);
             renderer.SetPropertyBlock(_propertyBlock);
         }
 
-        private static void ApplySurfacePresentationToBlock(MaterialPropertyBlock block, WaterSurfaceRenderData renderData)
+        private static void ApplySurfacePresentationToBlock(
+            MaterialPropertyBlock block,
+            WaterSurfaceRenderData renderData,
+            bool includeContactFoam)
         {
             if (block == null || renderData == null)
             {
@@ -123,6 +133,13 @@ namespace Water25D
             block.SetFloat(WaterShaderIds.SurfaceRingCount, Mathf.Clamp(renderData.ActiveRingCount, 0, renderData.ShaderArrayLength));
             block.SetVectorArray(WaterShaderIds.SurfaceRingsA, renderData.RingsA);
             block.SetVectorArray(WaterShaderIds.SurfaceRingsB, renderData.RingsB);
+            block.SetFloat(
+                WaterShaderIds.SurfaceFoamCount,
+                includeContactFoam
+                    ? Mathf.Clamp(renderData.ActiveContactFoamCount, 0, renderData.FoamShaderArrayLength)
+                    : 0f);
+            block.SetVectorArray(WaterShaderIds.SurfaceFoamsA, renderData.FoamsA);
+            block.SetVectorArray(WaterShaderIds.SurfaceFoamsB, renderData.FoamsB);
         }
 
         private static int GetSortingLayerId(string sortingLayerName)

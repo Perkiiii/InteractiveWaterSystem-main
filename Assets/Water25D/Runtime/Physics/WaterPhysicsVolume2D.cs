@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Water25D
@@ -10,33 +9,31 @@ namespace Water25D
     [DisallowMultipleComponent]
     public sealed class WaterPhysicsVolume2D : MonoBehaviour
     {
-        private sealed class BodyContact
-        {
-            public Rigidbody2D Body;
-            public int ColliderCount;
-        }
-
-        private readonly List<BodyContact> _contacts = new List<BodyContact>(8);
+        private readonly WaterLogicalBodyContactTracker _tracker = new WaterLogicalBodyContactTracker();
         private Water25DController _water;
         private LayerMask _interactionLayers;
         private bool _customDragEnabled;
         private float _customLinearDrag;
         private float _customAngularDrag;
 
-        public int LogicalContactCount => _contacts.Count;
+        public int LogicalContactCount => _tracker.LogicalBodyCount;
+        public int DroppedTrackedBodyCount => _tracker.DroppedBodyCount;
+        public int ColliderSampleOverflowCount => _tracker.ColliderOverflowCount;
 
         internal void Configure(
             Water25DController water,
             LayerMask interactionLayers,
             bool customDragEnabled,
             float customLinearDrag,
-            float customAngularDrag)
+            float customAngularDrag,
+            int maximumTrackedBodies)
         {
             _water = water;
             _interactionLayers = interactionLayers;
             _customDragEnabled = customDragEnabled;
             _customLinearDrag = Mathf.Max(0f, customLinearDrag);
             _customAngularDrag = Mathf.Max(0f, customAngularDrag);
+            _tracker.Configure(maximumTrackedBodies);
         }
 
         private void Awake()
@@ -49,21 +46,20 @@ namespace Water25D
 
         private void FixedUpdate()
         {
-            if (!_customDragEnabled || _contacts.Count == 0)
+            if (_water == null || !_water.isActiveAndEnabled)
             {
                 return;
             }
 
-            for (var i = _contacts.Count - 1; i >= 0; i--)
+            _tracker.CleanupInvalid();
+            if (!_customDragEnabled || _tracker.LogicalBodyCount == 0)
             {
-                var body = _contacts[i].Body;
-                if (body == null)
-                {
-                    _contacts.RemoveAt(i);
-                    continue;
-                }
+                return;
+            }
 
-                if (body.bodyType != RigidbodyType2D.Dynamic)
+            for (var i = 0; i < _tracker.LogicalBodyCount; i++)
+            {
+                if (!_tracker.TryGetBodyAt(i, out var body) || body.bodyType != RigidbodyType2D.Dynamic)
                 {
                     continue;
                 }
@@ -87,33 +83,21 @@ namespace Water25D
                 return;
             }
 
-            var body = other.attachedRigidbody;
-            if (body == null)
+            if (!_tracker.TryAdd(other, out var bodyBecameActive) || !bodyBecameActive || _water == null)
             {
                 return;
             }
 
-            var contact = FindContact(body);
-            if (contact != null)
-            {
-                contact.ColliderCount++;
-                return;
-            }
-
-            _contacts.Add(new BodyContact { Body = body, ColliderCount = 1 });
-            if (_water != null)
-            {
-                var point = other.bounds.center;
-                var velocity = body.linearVelocity;
-                _water.NotifyInteraction(new WaterInteractionEvent(
-                    _water,
-                    body,
-                    other,
-                    new Vector2(point.x, point.y),
-                    velocity,
-                    0f,
-                    WaterInteractionEventType.Submerged));
-            }
+            var point = other.bounds.center;
+            var velocity = other.attachedRigidbody.linearVelocity;
+            _water.NotifyInteraction(new WaterInteractionEvent(
+                _water,
+                other.attachedRigidbody,
+                other,
+                new Vector2(point.x, point.y),
+                velocity,
+                0f,
+                WaterInteractionEventType.Submerged));
         }
 
         private void OnTriggerExit2D(Collider2D other)
@@ -123,75 +107,38 @@ namespace Water25D
                 return;
             }
 
-            var body = other.attachedRigidbody;
-            if (body == null)
+            if (!_tracker.TryRemove(other, out var bodyBecameInactive) || !bodyBecameInactive || _water == null)
             {
                 return;
             }
 
-            var contact = FindContact(body);
-            if (contact == null)
-            {
-                return;
-            }
-
-            contact.ColliderCount--;
-            if (contact.ColliderCount > 0)
-            {
-                return;
-            }
-
-            RemoveContact(contact);
-            if (_water != null)
-            {
-                var point = other.bounds.center;
-                var velocity = body.linearVelocity;
-                _water.NotifyInteraction(new WaterInteractionEvent(
-                    _water,
-                    body,
-                    other,
-                    new Vector2(point.x, point.y),
-                    velocity,
-                    0f,
-                    WaterInteractionEventType.Resurfaced));
-            }
+            var point = other.bounds.center;
+            var velocity = other.attachedRigidbody != null ? other.attachedRigidbody.linearVelocity : Vector2.zero;
+            _water.NotifyInteraction(new WaterInteractionEvent(
+                _water,
+                other.attachedRigidbody,
+                other,
+                new Vector2(point.x, point.y),
+                velocity,
+                0f,
+                WaterInteractionEventType.Resurfaced));
         }
 
         private void OnDisable()
         {
-            _contacts.Clear();
+            ClearContacts();
+        }
+
+        internal void ClearContacts()
+        {
+            _tracker.Clear();
         }
 
         private bool CanInteract(Collider2D other)
         {
-            return isActiveAndEnabled && other != null &&
+            return isActiveAndEnabled && _water != null && _water.isActiveAndEnabled &&
+                   other != null && other.attachedRigidbody != null &&
                    (_interactionLayers.value & (1 << other.gameObject.layer)) != 0;
-        }
-
-        private BodyContact FindContact(Rigidbody2D body)
-        {
-            for (var i = 0; i < _contacts.Count; i++)
-            {
-                if (_contacts[i].Body == body)
-                {
-                    return _contacts[i];
-                }
-            }
-
-            return null;
-        }
-
-        private void RemoveContact(BodyContact contact)
-        {
-            var index = _contacts.IndexOf(contact);
-            if (index < 0)
-            {
-                return;
-            }
-
-            var lastIndex = _contacts.Count - 1;
-            _contacts[index] = _contacts[lastIndex];
-            _contacts.RemoveAt(lastIndex);
         }
     }
 }
