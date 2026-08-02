@@ -7,7 +7,7 @@ using Water25D.Rendering;
 
 namespace Water25D.Tests
 {
-    public sealed class Water25DEditorTests
+    public sealed class Water25DEditorTests : Water25DEditModeFixture
     {
         private const string TopMaterialPath = "Assets/Water25D/Materials/Water25D_Top.mat";
         private const string FrontMaterialPath = "Assets/Water25D/Materials/Water25D_Front.mat";
@@ -83,7 +83,7 @@ namespace Water25D.Tests
         public void ValidationReportsUnexpectedShader()
         {
             var root = CreateController();
-            var material = new Material(Shader.Find("Sprites/Default"));
+            var material = Track(new Material(Shader.Find("Sprites/Default")));
             try
             {
                 SetReference(root, "_topMaterialTemplate", material);
@@ -118,7 +118,7 @@ namespace Water25D.Tests
         public void SafeDefaultsDoNotReplaceValidUserAssets()
         {
             var root = CreateController();
-            var customTop = new Material(Shader.Find("Water25D/Top Surface"));
+            var customTop = Track(new Material(Shader.Find("Water25D/Top Surface")));
             try
             {
                 SetReference(root, "_topMaterialTemplate", customTop);
@@ -141,6 +141,7 @@ namespace Water25D.Tests
         {
             var defaultProfile = AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(StyleProfilePath);
             Assert.IsNotNull(defaultProfile);
+            TrackTemporaryAssetPrefix("Assets/Water25D/Profiles/Water25D_Editor_Test_StyleTest");
             var duplicate = Water25DInspectorUtility.DuplicateProfileAsset(defaultProfile, "Water25D Editor Test", "StyleTest");
             try
             {
@@ -269,10 +270,93 @@ namespace Water25D.Tests
             }
         }
 
-        private static Water25DController CreateController()
+        [Test]
+        public void FixtureCreatesControllerInPreviewSceneAndPreservesActiveScene()
         {
-            var root = new GameObject("Water25D Editor Test");
+            var controller = CreateController();
+            var root = controller.gameObject;
+            Assert.Greater(root.transform.childCount, 0);
+            Assert.AreEqual(TestScene, controller.gameObject.scene);
+            Assert.AreNotEqual(ActiveSceneBeforeFixture, controller.gameObject.scene);
+            Assert.AreEqual(ActiveSceneBeforeFixture, UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+            DisposeFixtureNow();
+
+            Assert.IsTrue(root == null);
+            Assert.IsTrue(controller == null);
+            AssertActiveSceneUnchanged();
+        }
+
+        [Test]
+        public void FixtureDeletesTemporaryProfileCreatedByTest()
+        {
+            var defaultProfile = AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(StyleProfilePath);
+            Assert.IsNotNull(defaultProfile);
+            TrackTemporaryAssetPrefix("Assets/Water25D/Profiles/Water25D_Editor_Test_StyleTest");
+            var duplicate = Water25DInspectorUtility.DuplicateProfileAsset(defaultProfile, "Water25D Editor Test", "StyleTest");
+            Assert.IsNotNull(duplicate);
+            var duplicatePath = AssetDatabase.GetAssetPath(duplicate);
+            Assert.IsFalse(string.IsNullOrEmpty(duplicatePath));
+
+            DisposeFixtureNow();
+
+            Assert.IsNull(AssetDatabase.LoadMainAssetAtPath(duplicatePath));
+            AssertActiveSceneUnchanged();
+        }
+
+        [Test]
+        public void FixtureTeardownCleansPartialControllerConstructionAndClosesPreviewScene()
+        {
+            var previewScene = TestScene;
+            try
+            {
+                CreateController(true);
+                Assert.Fail("The injected partial-construction failure did not occur.");
+            }
+            catch (System.InvalidOperationException)
+            {
+                // The fixture must clean the tracked root even though the factory did not
+                // return a controller to the test method.
+            }
+
+            Assert.AreEqual(1, previewScene.rootCount);
+            DisposeFixtureNow();
+
+            Assert.IsFalse(previewScene.IsValid());
+            AssertActiveSceneUnchanged();
+        }
+
+        [Test]
+        public void RepeatedFixtureCreationDoesNotAccumulateRootsOrReflectionManagers()
+        {
+            var first = CreateController();
+            var second = CreateController();
+            Assert.AreNotSame(first, second);
+            Assert.AreEqual(2, TestScene.rootCount);
+            Assert.AreEqual(ReflectionManagerPresentBeforeFixture, Water25D.Rendering.WaterReflectionManager.HasInstance);
+
+            DisposeFixtureNow();
+
+            Assert.IsTrue(first == null);
+            Assert.IsTrue(second == null);
+            Assert.AreEqual(ReflectionManagerPresentBeforeFixture, Water25D.Rendering.WaterReflectionManager.HasInstance);
+            AssertActiveSceneUnchanged();
+        }
+
+        private Water25DController CreateController()
+        {
+            return CreateController(false);
+        }
+
+        private Water25DController CreateController(bool injectFailure)
+        {
+            var root = CreateGameObject("Water25D Editor Test");
             var controller = root.AddComponent<Water25DController>();
+            if (injectFailure)
+            {
+                throw new System.InvalidOperationException("Injected partial fixture construction failure.");
+            }
+
             AssignPackageDefaults(controller);
             controller.RepairHierarchyAndRebuild();
             return controller;
@@ -289,7 +373,7 @@ namespace Water25D.Tests
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void SetReference(Water25DController controller, string propertyPath, Object value)
+        private static void SetReference(Water25DController controller, string propertyPath, UnityEngine.Object value)
         {
             var serializedObject = new SerializedObject(controller);
             serializedObject.FindProperty(propertyPath).objectReferenceValue = value;

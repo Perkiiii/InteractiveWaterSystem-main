@@ -5,7 +5,7 @@ using Water25D.Rendering;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterSurfacePresentationTests
+    public sealed class WaterSurfacePresentationTests : Water25DEditModeFixture
     {
         [Test]
         public void DefaultCapacityIsEightAndClampsToShaderMaximum()
@@ -542,7 +542,7 @@ namespace Water25D.Tests
         [Test]
         public void ControllerSurfaceMappingReturnsLocalXZWorldUnits()
         {
-            var root = new GameObject("Water25D Surface Mapping Test");
+            var root = CreateGameObject("Water25D Surface Mapping Test");
             try
             {
                 root.transform.position = new Vector3(10f, 2f, -4f);

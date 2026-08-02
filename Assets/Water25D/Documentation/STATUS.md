@@ -288,6 +288,14 @@ Remaining manual visual work:
 - Use the Frame Debugger and Profiler while the scene is playing to confirm the existing top/front draws carry the interaction data, no interaction camera/RT or extra draw is created, and no steady-state allocations or resource churn are introduced. Check prefab-stage and multi-selection Inspector behavior separately.
 - Verify a moved copy of `Assets/Water25D/` in a clean compatible project; project-level URP, sorting-layer, and setup requirements remain documented rather than silently configured.
 
+## EditMode fixture isolation maintenance
+
+- Root cause: `Water25DEditorTests.CreateController` constructed `Water25D Editor Test` in the active scene before its callers entered `try/finally`; an exception during construction could therefore leave a serialized root behind. The audit also covered every other EditMode test creator in `WaterControllerEditModeTests`, `WaterLogicalBodyContactTrackerTests`, `WaterProductionTests`, `WaterRenderingOwnershipTests`, `WaterSurfaceModeEditModeTests`, and `WaterSurfacePresentationTests`.
+- `Water25DEditModeFixture` now creates test roots in a dedicated preview scene before adding components, tracks generated Unity objects and temporary assets, cleans them with `DestroyImmediate`, removes only newly-created test assets, restores reflection-manager ownership, and closes the preview scene even when cleanup encounters an error. The menu authoring path has a preview-scene-aware overload so its controller is also added after scene isolation.
+- Unity inspection found exactly one serialized `Water25D Editor Test` root in `Assets/Water25D/Samples/Water25D_VisualFlat.unity`. Only that verified test fixture and its generated children were removed; the one deliberate scene save produced only the corresponding 606-line deletion, with no unrelated serialized changes.
+- Focused fixture/ownership tests passed 8/8 in job `e6c1246076894d8c9b2fbe6f398b2984`. The final complete EditMode runs passed 80/80 in jobs `699ae009cb64474b9718f2e10f99be6c` and `231fc8ad31a54b64806eb29d7cfd76d1`; the final complete PlayMode run passed 13/13 in job `415780f3fa3c4790a71f98a8747b85a4`. After each final suite, the active scene remained `Water25D_VisualFlat`, with one loaded scene, 10 roots, zero exact-name roots, zero reflection managers/cameras/textures, zero ripple textures, and `isDirty=False`. The final Console audit returned zero error/warning entries.
+- This is a test-fixture lifecycle correction only. Phase 2 remains the active milestone; Phase 3 was not started.
+
 ## Package boundaries
 
 The Water25D runtime and editor assemblies have no code dependency on `Assets/InteractiveWaterSystem/`, `Assets/Cainos/`, `Assets/DemoScenes/`, or Lucid Editor. Unity MCP is development tooling and is not referenced by the package code.

@@ -5,13 +5,13 @@ using Water25D.Rendering;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterProductionTests
+    public sealed class WaterProductionTests : Water25DEditModeFixture
     {
         [Test]
         public void ReflectionGroupsQuantizeCoplanarPlanesAndSeparateDifferentHeights()
         {
-            var first = new GameObject("Water25D Reflection Test A");
-            var second = new GameObject("Water25D Reflection Test B");
+            var first = CreateGameObject("Water25D Reflection Test A");
+            var second = CreateGameObject("Water25D Reflection Test B");
             try
             {
                 first.transform.position = new Vector3(0f, 2f, 0f);
@@ -34,7 +34,7 @@ namespace Water25D.Tests
         [Test]
         public void DisabledReflectionDoesNotCreateARegistration()
         {
-            var root = new GameObject("Water25D Reflection Disabled Test");
+            var root = CreateGameObject("Water25D Reflection Disabled Test");
             var renderer = root.AddComponent<MeshRenderer>();
             try
             {
@@ -58,7 +58,7 @@ namespace Water25D.Tests
         [Test]
         public void FXPoolRejectsExhaustionAndReturnsEntriesWithoutDestroyingDuringUse()
         {
-            var root = new GameObject("Water25D FX Pool Test");
+            var root = CreateGameObject("Water25D FX Pool Test");
             WaterFXPool pool = null;
             try
             {

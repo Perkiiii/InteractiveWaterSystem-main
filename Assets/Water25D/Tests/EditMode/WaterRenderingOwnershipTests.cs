@@ -8,7 +8,7 @@ using Water25D.Rendering;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterRenderingOwnershipTests
+    public sealed class WaterRenderingOwnershipTests : Water25DEditModeFixture
     {
         [Test]
         public void FinalPropertyBlockWritesHaveOnePackageOwner()
@@ -52,7 +52,7 @@ namespace Water25D.Tests
             Assert.IsFalse(planar.Enabled);
             Assert.IsFalse(planar.StylizedFallback);
 
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var texture = Track(new Texture2D(2, 2, TextureFormat.RGBA32, false));
             try
             {
                 var matrix = Matrix4x4.TRS(new Vector3(1f, 2f, 3f), Quaternion.Euler(10f, 20f, 30f), Vector3.one);
@@ -73,8 +73,8 @@ namespace Water25D.Tests
         [Test]
         public void ReflectionRegistrationPublishesSnapshotWithoutRendererMutation()
         {
-            var root = new GameObject("Water Reflection Registration Test");
-            var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var root = CreateGameObject("Water Reflection Registration Test");
+            var texture = Track(new Texture2D(2, 2, TextureFormat.RGBA32, false));
             WaterReflectionManager.ReflectionRegistration registration = null;
             try
             {
@@ -120,7 +120,7 @@ namespace Water25D.Tests
         [Test]
         public void CompleteWriteKeepsPresentationAndReflectionTogether()
         {
-            var root = new GameObject("Water Complete Rendering State Test");
+            var root = CreateGameObject("Water Complete Rendering State Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -133,7 +133,7 @@ namespace Water25D.Tests
                 presentation.UpdateWake(42, new Vector2(0f, 0f), 0.5f, 0.1f);
                 Assert.IsTrue(presentation.UpdateWake(42, new Vector2(1f, 0f), 0.5f, 0.1f));
 
-                var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                var texture = Track(new Texture2D(2, 2, TextureFormat.RGBA32, false));
                 try
                 {
                     var matrix = Matrix4x4.TRS(new Vector3(2f, 3f, 4f), Quaternion.identity, Vector3.one);

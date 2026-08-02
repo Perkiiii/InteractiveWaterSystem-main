@@ -3,12 +3,12 @@ using UnityEngine;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterLogicalBodyContactTrackerTests
+    public sealed class WaterLogicalBodyContactTrackerTests : Water25DEditModeFixture
     {
         [Test]
         public void OneColliderCreatesOneLogicalBodyAndDuplicateMembershipIsRejected()
         {
-            var bodyObject = new GameObject("Water25D Tracker Body");
+            var bodyObject = CreateGameObject("Water25D Tracker Body");
             try
             {
                 var body = bodyObject.AddComponent<Rigidbody2D>();
@@ -33,7 +33,7 @@ namespace Water25D.Tests
         [Test]
         public void TwoCollidersOnOneBodyRemainLogicalUntilFinalColliderLeaves()
         {
-            var bodyObject = new GameObject("Water25D Multi Collider Body");
+            var bodyObject = CreateGameObject("Water25D Multi Collider Body");
             try
             {
                 bodyObject.AddComponent<Rigidbody2D>();
@@ -63,7 +63,7 @@ namespace Water25D.Tests
         [Test]
         public void ColliderAndBodyCapacitiesAreDeterministicAndOverflowIsBounded()
         {
-            var bodyObject = new GameObject("Water25D Tracker Overflow Body");
+            var bodyObject = CreateGameObject("Water25D Tracker Overflow Body");
             var otherBodies = new GameObject[2];
             try
             {
@@ -89,7 +89,7 @@ namespace Water25D.Tests
 
                 for (var i = 0; i < otherBodies.Length; i++)
                 {
-                    otherBodies[i] = new GameObject("Water25D Tracker Capacity Body " + i);
+                    otherBodies[i] = CreateGameObject("Water25D Tracker Capacity Body " + i);
                     otherBodies[i].AddComponent<Rigidbody2D>();
                     var collider = otherBodies[i].AddComponent<BoxCollider2D>();
                     if (i == 0)
@@ -125,7 +125,7 @@ namespace Water25D.Tests
         [Test]
         public void DisabledColliderIsCleanedAndClearRemovesAllReferences()
         {
-            var bodyObject = new GameObject("Water25D Tracker Cleanup Body");
+            var bodyObject = CreateGameObject("Water25D Tracker Cleanup Body");
             try
             {
                 bodyObject.AddComponent<Rigidbody2D>();

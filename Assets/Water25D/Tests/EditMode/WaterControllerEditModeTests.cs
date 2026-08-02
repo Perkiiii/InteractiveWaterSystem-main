@@ -4,22 +4,22 @@ using UnityEngine;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterControllerEditModeTests
+    public sealed class WaterControllerEditModeTests : Water25DEditModeFixture
     {
         private const string TopMaterialPath = "Assets/Water25D/Materials/Water25D_Top.mat";
         private const string FrontMaterialPath = "Assets/Water25D/Materials/Water25D_Front.mat";
         private const string RippleMaterialPath = "Assets/Water25D/Materials/Water25D_RippleSimulation.mat";
         private const string StyleProfilePath = "Assets/Water25D/Profiles/Water25D_DefaultStyle.asset";
         private const string QualityProfilePath = "Assets/Water25D/Profiles/Water25D_MediumQuality.asset";
-        private const string PersistencePrefabPath = "Assets/Water25D/Tests/EditMode/Water25D_PersistenceTest.prefab";
+        private const string PersistencePrefabBasePath = "Assets/Water25D/Tests/EditMode/Water25D_PersistenceTest.prefab";
 
         [Test]
         public void ControllerRepairsNamedHierarchyWithoutRemovingUnrelatedChild()
         {
-            var root = new GameObject("Water Test Root");
+            var root = CreateGameObject("Water Test Root");
             try
             {
-                var unrelated = new GameObject("Authored Child");
+                var unrelated = CreateGameObject("Authored Child");
                 unrelated.transform.SetParent(root.transform, false);
                 var controller = root.AddComponent<Water25DController>();
                 controller.RepairHierarchyAndRebuild();
@@ -74,8 +74,8 @@ namespace Water25D.Tests
         [Test]
         public void PersistentMaterialsSurvivePrefabSaveReloadAndAuthoringLifecycle()
         {
-            AssetDatabase.DeleteAsset(PersistencePrefabPath);
-            var root = new GameObject("Water25D Persistence Test");
+            var persistencePrefabPath = ReserveTemporaryAssetPath(PersistencePrefabBasePath);
+            var root = CreateGameObject("Water25D Persistence Test");
             GameObject reloaded = null;
             try
             {
@@ -83,15 +83,15 @@ namespace Water25D.Tests
                 AssignPackageDefaults(controller);
                 controller.RepairHierarchyAndRebuild();
 
-                var prefab = PrefabUtility.SaveAsPrefabAsset(root, PersistencePrefabPath);
+                var prefab = PrefabUtility.SaveAsPrefabAsset(root, persistencePrefabPath);
                 Assert.IsNotNull(prefab);
                 Object.DestroyImmediate(root);
                 root = null;
 
-                AssetDatabase.ImportAsset(PersistencePrefabPath);
-                var persistedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PersistencePrefabPath);
+                AssetDatabase.ImportAsset(persistencePrefabPath);
+                var persistedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(persistencePrefabPath);
                 Assert.IsNotNull(persistedPrefab);
-                reloaded = PrefabUtility.InstantiatePrefab(persistedPrefab) as GameObject;
+                reloaded = Track(PrefabUtility.InstantiatePrefab(persistedPrefab, TestScene) as GameObject);
                 Assert.IsNotNull(reloaded);
 
                 var reloadedController = reloaded.GetComponent<Water25DController>();
@@ -114,7 +114,6 @@ namespace Water25D.Tests
                     Object.DestroyImmediate(root);
                 }
 
-                AssetDatabase.DeleteAsset(PersistencePrefabPath);
             }
         }
 

@@ -3,11 +3,12 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Water25D.Rendering;
 
 namespace Water25D.Tests
 {
-    public sealed class WaterSurfaceModeEditModeTests
+    public sealed class WaterSurfaceModeEditModeTests : Water25DEditModeFixture
     {
         [Test]
         public void SurfaceModeNumericValuesAreSerializationContract()
@@ -19,7 +20,7 @@ namespace Water25D.Tests
         [Test]
         public void NewlyAddedControllerUsesFlatStylizedAfterReset()
         {
-            var root = new GameObject("Water25D New Controller Test");
+            var root = CreateGameObject("Water25D New Controller Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -34,7 +35,7 @@ namespace Water25D.Tests
         [Test]
         public void ExistingSimulatedControllerIsNotAutomaticallyChanged()
         {
-            var root = new GameObject("Water25D Existing Controller Test");
+            var root = CreateGameObject("Water25D Existing Controller Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -53,7 +54,7 @@ namespace Water25D.Tests
         [Test]
         public void FlatStylizedBuildsMinimalStaticTopAndFrontGeometry()
         {
-            var root = new GameObject("Water25D Flat Geometry Test");
+            var root = CreateGameObject("Water25D Flat Geometry Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -89,7 +90,7 @@ namespace Water25D.Tests
         [Test]
         public void FlatVisualDepthResizeRebuildsOnlyTopGeometry()
         {
-            var root = new GameObject("Water25D Flat Resize Test");
+            var root = CreateGameObject("Water25D Flat Resize Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -133,7 +134,7 @@ namespace Water25D.Tests
         [Test]
         public void SwitchingModesReplacesGeneratedMeshesWithoutDuplicatingHierarchy()
         {
-            var root = new GameObject("Water25D Mode Switch Geometry Test");
+            var root = CreateGameObject("Water25D Mode Switch Geometry Test");
             try
             {
                 var controller = root.AddComponent<Water25DController>();
@@ -185,11 +186,18 @@ namespace Water25D.Tests
             {
                 var menuType = typeof(global::Water25D.Editor.Water25DEditor).Assembly.GetType("Water25D.Editor.Water25DMenu");
                 Assert.IsNotNull(menuType);
-                var createMethod = menuType.GetMethod("CreateWater", BindingFlags.Static | BindingFlags.NonPublic);
+                var menuMethod = menuType.GetMethod("CreateWater", BindingFlags.Static | BindingFlags.NonPublic);
+                Assert.IsNotNull(menuMethod);
+                var createMethod = menuType.GetMethod(
+                    "CreateWaterInScene",
+                    BindingFlags.Static | BindingFlags.NonPublic,
+                    null,
+                    new[] { typeof(Scene), typeof(bool) },
+                    null);
                 Assert.IsNotNull(createMethod);
 
-                createMethod.Invoke(null, null);
-                created = Selection.activeGameObject;
+                created = (GameObject)createMethod.Invoke(null, new object[] { TestScene, false });
+                Track(created);
                 Assert.IsNotNull(created);
                 Assert.AreEqual("Water25D", created.name);
                 Assert.AreEqual(WaterSurfaceMode.FlatStylized, created.GetComponent<Water25DController>().SurfaceMode);
