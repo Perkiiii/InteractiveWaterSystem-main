@@ -72,6 +72,29 @@ Do not hard-code Unity, URP, Input System, Test Framework, or other package vers
 
 Update this plan only when architecture, phase order, public contracts, acceptance criteria, or package boundaries change. Routine implementation progress belongs in `STATUS.md`.
 
+## Current Flat-Stylized Production Track
+
+The original 13-phase roadmap below remains preserved as architectural history. The authoritative remaining implementation order is the four-phase flat-stylized production track summarized here and specified in detail in [`Assets/Water25D/Documentation/Design/FLAT_STYLIZED_IMPLEMENTATION_PLAN.md`](../Water25D/Documentation/Design/FLAT_STYLIZED_IMPLEMENTATION_PLAN.md). The resolved visual direction is recorded in [`Assets/Water25D/Documentation/Design/FLAT_STYLIZED_DESIGN_BRIEF.md`](../Water25D/Documentation/Design/FLAT_STYLIZED_DESIGN_BRIEF.md). Routine progress, completed milestones, and test evidence belong only in [`Assets/Water25D/Documentation/STATUS.md`](../Water25D/Documentation/STATUS.md).
+
+Existing serialized controllers remain compatible with `SimulatedRipples`; genuinely new controllers use `FlatStylized`. In `FlatStylized`, the top remains geometrically flat and the Custom Render Texture (CRT) is neither allocated nor ticked. Completed foundation work includes flat/simulated routing; four-vertex, two-triangle flat-top geometry; fixed-capacity procedural rings; qualified downward and upward waterline crossings; shared fixed-capacity logical-body tracking; and flat-only, body-keyed contact foam. Fixed-capacity distance-spaced wakes are the next bounded implementation task.
+
+The remaining production phases are:
+
+1. **Wake completion and interaction validation** — Add fixed-capacity distance-spaced wakes with frame-rate-independent spacing, thresholds, a defined reversal policy, fading, and deterministic capacity handling. Render them analytically on the top and front, with tests and strict mode isolation.
+2. **Rendering ownership and painterly interactions** — Make `WaterRenderingModule` the sole final `MaterialPropertyBlock` writer. Add optional ring, foam, and wake mask atlases with stable variants and rotations while preserving analytical fallbacks; final artwork is not required in this phase.
+3. **Stylized water and reflection presentation** — Add shallow/deep colour, scrolling normal and detail layers, Fresnel response, stylized highlights, foam, refraction, and reflection treatment; add front distortion, caustics, shafts, and flow; and support shared planar plus camera-free stylized reflections. `FlatStylized` must not use vertex displacement.
+4. **FX, tooling, migration, and production validation** — Add pooled splash variants, quality tiers, Inspector and validation tooling, explicit reversible migration, and profiling, lifecycle, clean-import, and packaging validation.
+
+### Approved development references
+
+The following are development references only:
+
+- [Ameye's Stylized Water Shader](https://ameye.dev/notes/stylized-water-shader/) for colour, Fresnel, normal, foam, refraction, caustic, and reflection presentation.
+- [Minions Art — Shader Graph Interactive Water](https://www.patreon.com/minionsart/posts/shader-graph-30490169) for painterly ripple, mask, distortion, edge-foam, and depth-colour ideas.
+- [Unity — How to Make Nature Shaders with Shader Graph in 2022 LTS](https://unity.com/blog/engine-platform/nature-shaders-with-shader-graph-in-2022-lts) for the Japanese-garden stream's restrained motion, flow-line, edge-highlight, ripple, foam, and reflection composition.
+
+Water25D reimplements selected concepts using project-owned C#, HLSL, shaders, profiles, tests, and artwork. These references are not runtime, editor, serialized, or package dependencies. Access to a source asset does not by itself grant redistribution permission. Third-party source code, Shader Graphs, scripts, textures, materials, particles, prefabs, and pipeline assets must not be distributed without explicit licensing approval.
+
 ### Repository evidence map
 
 The principal reference files are:
