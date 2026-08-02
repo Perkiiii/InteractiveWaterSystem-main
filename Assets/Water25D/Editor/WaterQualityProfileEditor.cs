@@ -68,6 +68,15 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawWakeFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Wake Capacity", delegate
+            {
+                Property(serializedObject, "_maximumWakeSegments", "Maximum Active Wake Segments", "Fixed analytical wake capacity for FlatStylized. Values are clamped to 1–16.");
+                Property(serializedObject, "_maximumWakeEmissionsPerStep", "Maximum Wake Emissions Per Step", "Caps distance-spaced segment creation in one physics step. Excess whole intervals are dropped while the fractional distance remainder is retained.");
+            });
+        }
+
         public static bool DrawAmbientBandField(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water25D Ambient Wave Bands", delegate
@@ -128,6 +137,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Geometry", false, DrawGeometryFields);
             DrawStandaloneSection(serializedObject, "Surface Rings", false, DrawSurfaceRingFields);
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
+            DrawStandaloneSection(serializedObject, "Wake Capacity", false, DrawWakeFields);
             DrawValidation(serializedObject, profile);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

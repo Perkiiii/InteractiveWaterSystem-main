@@ -20,6 +20,9 @@ namespace Water25D.Tests
             Assert.AreEqual(16, defaultModule.RenderData.ShaderArrayLength);
             Assert.AreEqual(4, WaterQualitySettings.Default.MaximumContactFoams);
             Assert.AreEqual(8, WaterQualitySettings.Default.MaximumTrackedSurfaceBodies);
+            Assert.AreEqual(8, defaultModule.MaximumWakeSegments);
+            Assert.AreEqual(2, defaultModule.MaximumWakeEmissionsPerStep);
+            Assert.AreEqual(16, defaultModule.RenderData.WakeShaderArrayLength);
         }
 
         [Test]
@@ -234,6 +237,8 @@ namespace Water25D.Tests
             changed = settings;
             changed.MaximumContactFoams = 8;
             changed.MaximumTrackedSurfaceBodies = 16;
+            changed.MaximumWakeSegments = 16;
+            changed.MaximumWakeEmissionsPerStep = 4;
             Assert.IsTrue(settings.SimulationEquals(changed));
             Assert.IsFalse(settings.Equals(changed));
             Assert.AreNotEqual(settings.GetHashCode(), changed.GetHashCode());
@@ -246,6 +251,261 @@ namespace Water25D.Tests
             changed.Sanitize();
             Assert.That(changed.MaximumContactFoams, Is.InRange(1, 8));
             Assert.That(changed.MaximumTrackedSurfaceBodies, Is.InRange(1, 16));
+        }
+
+        [Test]
+        public void WakeDefaultsAreCalmAndSanitizeDeterministically()
+        {
+            var style = WaterStyleSettings.Default;
+            Assert.AreEqual(0.75f, style.WakeEmissionSpacing, 0.0001f);
+            Assert.Greater(style.WakeMinimumLateralSpeed, 0f);
+            Assert.Greater(style.WakeLifetime, 0f);
+            Assert.Greater(style.WakeIntensity, 0f);
+
+            style.WakeEmissionSpacing = -1f;
+            style.WakeMinimumLateralSpeed = float.NaN;
+            style.WakeWidthMultiplier = -1f;
+            style.WakeMinimumHalfWidth = 2f;
+            style.WakeMaximumHalfWidth = 0.1f;
+            style.WakeLifetime = float.PositiveInfinity;
+            style.WakeFadePower = -1f;
+            style.WakeDirectionReversalAngle = float.NaN;
+            style.Sanitize();
+
+            Assert.Greater(style.WakeEmissionSpacing, 0f);
+            Assert.GreaterOrEqual(style.WakeMinimumLateralSpeed, 0f);
+            Assert.GreaterOrEqual(style.WakeWidthMultiplier, 0f);
+            Assert.GreaterOrEqual(style.WakeMaximumHalfWidth, style.WakeMinimumHalfWidth);
+            Assert.Greater(style.WakeLifetime, 0f);
+            Assert.Greater(style.WakeFadePower, 0f);
+            Assert.That(style.WakeDirectionReversalAngle, Is.InRange(90f, 179f));
+
+            var quality = WaterQualitySettings.Default;
+            quality.MaximumWakeSegments = 0;
+            quality.MaximumWakeEmissionsPerStep = 0;
+            quality.Sanitize();
+            Assert.That(quality.MaximumWakeSegments, Is.InRange(1, 16));
+            Assert.That(quality.MaximumWakeEmissionsPerStep, Is.InRange(1, 16));
+        }
+
+        [Test]
+        public void WakeCapacityUsesPreallocatedArraysAndDeterministicReplacement()
+        {
+            var module = CreateWakeModule(2, 16);
+            var renderData = module.RenderData;
+            var wakesA = renderData.WakesA;
+            var wakesB = renderData.WakesB;
+
+            Assert.IsFalse(module.UpdateWake(7, Vector2.zero, 0.5f, 1f));
+            Assert.IsTrue(module.UpdateWake(7, Vector2.right, 0.5f, 1f));
+            Assert.IsTrue(module.UpdateWake(7, Vector2.right * 2f, 0.5f, 1f));
+            Assert.IsTrue(module.UpdateWake(7, Vector2.right * 3f, 0.5f, 1f));
+
+            Assert.AreEqual(2, module.ActiveWakeSegmentCount);
+            Assert.AreEqual(1, module.ReplacedWakeCount);
+            Assert.AreSame(wakesA, module.RenderData.WakesA);
+            Assert.AreSame(wakesB, module.RenderData.WakesB);
+            Assert.AreEqual(16, module.RenderData.WakeShaderArrayLength);
+            Assert.AreEqual(2.5f, module.RenderData.GetWakeA(0).x, 0.0001f);
+            // The newest segment remains in the second slot while the oldest slot is reclaimed.
+            Assert.AreEqual(1.5f, module.RenderData.GetWakeA(1).x, 0.0001f);
+        }
+
+        [Test]
+        public void WakeBodyStateCapacityDropsWithoutGrowingStorage()
+        {
+            var module = new WaterSurfacePresentationModule();
+            var quality = WakeQuality(16, 16);
+            quality.MaximumTrackedSurfaceBodies = 1;
+            module.Configure(quality, WakeStyle());
+
+            Assert.IsFalse(module.UpdateWake(1, Vector2.zero, 0.5f, 1f));
+            Assert.IsFalse(module.UpdateWake(2, Vector2.zero, 0.5f, 1f));
+            Assert.AreEqual(1, module.DroppedWakeBodyCount);
+            Assert.IsFalse(module.UpdateWake(2, Vector2.right, 0.5f, 1f));
+            Assert.AreEqual(2, module.DroppedWakeBodyCount);
+            Assert.AreEqual(16, module.RenderData.WakeShaderArrayLength);
+        }
+
+        [Test]
+        public void WakeSpacingUsesSurfaceDistanceAndInterpolatesLargeSteps()
+        {
+            var module = CreateWakeModule(16, 16);
+            Assert.IsFalse(module.UpdateWake(1, Vector2.zero, 0.5f, 1f));
+            Assert.IsTrue(module.UpdateWake(1, new Vector2(2.4f, 0f), 0.5f, 2.4f));
+
+            Assert.AreEqual(2, module.ActiveWakeSegmentCount);
+            Assert.AreEqual(0.5f, module.RenderData.GetWakeA(0).x, 0.0001f);
+            Assert.AreEqual(1.5f, module.RenderData.GetWakeA(1).x, 0.0001f);
+            Assert.AreEqual(1.5f, module.RenderData.GetWakeA(0).z, 0.0001f);
+            Assert.AreEqual(2.5f, module.RenderData.GetWakeA(1).z, 0.0001f);
+        }
+
+        [Test]
+        public void WakeRemainderIsRetainedAndEquivalentPathsMatch()
+        {
+            var first = CreateWakeModule(16, 16);
+            Assert.IsFalse(first.UpdateWake(1, Vector2.zero, 0.5f, 1f));
+            Assert.IsFalse(first.UpdateWake(1, new Vector2(0.4f, 0f), 0.5f, 1f));
+            Assert.IsTrue(first.TryGetWakeDistanceRemainder(1, out var remainder));
+            Assert.AreEqual(0.4f, remainder, 0.0001f);
+            Assert.IsTrue(first.UpdateWake(1, new Vector2(1.1f, 0f), 0.5f, 1f));
+            Assert.AreEqual(1, first.ActiveWakeSegmentCount);
+            Assert.AreEqual(0.5f, first.RenderData.GetWakeA(0).x, 0.0001f);
+
+            var largeStep = CreateWakeModule(16, 16);
+            var smallSteps = CreateWakeModule(16, 16);
+            largeStep.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            smallSteps.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            Assert.IsTrue(largeStep.UpdateWake(1, new Vector2(2f, 0f), 0.5f, 1f));
+            Assert.IsFalse(smallSteps.UpdateWake(1, new Vector2(0.8f, 0f), 0.5f, 0.8f));
+            Assert.IsTrue(smallSteps.UpdateWake(1, new Vector2(2f, 0f), 0.5f, 1.2f));
+            Assert.AreEqual(largeStep.ActiveWakeSegmentCount, smallSteps.ActiveWakeSegmentCount);
+            for (var i = 0; i < largeStep.ActiveWakeSegmentCount; i++)
+            {
+                Assert.AreEqual(largeStep.RenderData.GetWakeA(i), smallSteps.RenderData.GetWakeA(i));
+                Assert.AreEqual(largeStep.RenderData.GetWakeB(i), smallSteps.RenderData.GetWakeB(i));
+            }
+        }
+
+        [Test]
+        public void WakeEmissionCapRetainsOnlyBoundedFractionalRemainder()
+        {
+            var module = CreateWakeModule(16, 2);
+            module.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            Assert.IsTrue(module.UpdateWake(1, new Vector2(5.25f, 0f), 0.5f, 1f));
+            Assert.AreEqual(2, module.ActiveWakeSegmentCount);
+            Assert.IsTrue(module.TryGetWakeDistanceRemainder(1, out var remainder));
+            Assert.AreEqual(0.25f, remainder, 0.0001f);
+
+            Assert.IsFalse(module.UpdateWake(1, new Vector2(5.85f, 0f), 0.6f, 0.6f));
+            Assert.IsTrue(module.UpdateWake(1, new Vector2(6.45f, 0f), 0.6f, 0.6f));
+            Assert.AreEqual(3, module.ActiveWakeSegmentCount);
+        }
+
+        [Test]
+        public void WakeRejectsSlowZeroAndNonFiniteMovement()
+        {
+            var module = CreateWakeModule(16, 16);
+            var style = WakeStyle();
+            style.WakeMinimumLateralSpeed = 1f;
+            module.Configure(WakeQuality(16, 16), style);
+            module.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            Assert.IsFalse(module.UpdateWake(1, new Vector2(0.5f, 0f), 0.5f, 1f));
+            Assert.IsFalse(module.UpdateWake(1, new Vector2(0.5f, 0f), 0.5f, 1f));
+            Assert.IsFalse(module.UpdateWake(1, new Vector2(float.NaN, 0f), 0.5f, 1f));
+            Assert.AreEqual(0, module.ActiveWakeSegmentCount);
+        }
+
+        [Test]
+        public void WakeWidthIsDerivedAndClampedFromAggregateContactWidth()
+        {
+            var style = WakeStyle();
+            style.WakeWidthMultiplier = 2f;
+            style.WakeWidthPadding = 0.1f;
+            style.WakeMinimumHalfWidth = 0.2f;
+            style.WakeMaximumHalfWidth = 0.4f;
+            var module = new WaterSurfacePresentationModule();
+            module.Configure(WakeQuality(16, 16), style);
+            module.UpdateWake(1, Vector2.zero, 0.1f, 1f);
+            module.UpdateWake(1, Vector2.right, 0.1f, 1f);
+            Assert.AreEqual(0.3f, module.RenderData.GetWakeB(0).x, 0.0001f);
+
+            var capped = new WaterSurfacePresentationModule();
+            capped.Configure(WakeQuality(16, 16), style);
+            capped.UpdateWake(1, Vector2.zero, 1f, 1f);
+            capped.UpdateWake(1, Vector2.right, 1f, 1f);
+            Assert.AreEqual(0.4f, capped.RenderData.GetWakeB(0).x, 0.0001f);
+        }
+
+        [Test]
+        public void WakeAgesFadesAndReusesExpiredSlots()
+        {
+            var style = WakeStyle();
+            style.WakeLifetime = 1f;
+            var module = new WaterSurfacePresentationModule(2);
+            module.Configure(WakeQuality(2, 16), style);
+            module.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            module.UpdateWake(1, Vector2.right, 0.5f, 1f);
+            Assert.IsTrue(module.Tick(0.25f));
+            Assert.AreEqual(0.25f, module.RenderData.GetWakeB(0).y, 0.0001f);
+            Assert.IsTrue(module.Tick(0.75f));
+            Assert.AreEqual(0, module.ActiveWakeSegmentCount);
+            Assert.AreEqual(0, module.ReplacedWakeCount);
+
+            module.UpdateWake(1, Vector2.right * 2f, 0.5f, 1f);
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+            Assert.AreEqual(0, module.ReplacedWakeCount);
+        }
+
+        [Test]
+        public void WakeDirectionReversalResetsAccumulatorWithoutBridgeSegment()
+        {
+            var module = CreateWakeModule(16, 16);
+            module.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            module.UpdateWake(1, new Vector2(1.2f, 0f), 0.5f, 1f);
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+
+            Assert.IsFalse(module.UpdateWake(1, new Vector2(-0.1f, 0f), 0.5f, 1f));
+            Assert.IsTrue(module.TryGetWakeDistanceRemainder(1, out var remainder));
+            Assert.AreEqual(0f, remainder, 0.0001f);
+            Assert.IsTrue(module.UpdateWake(1, new Vector2(-1.1f, 0f), 0.5f, 1f));
+            Assert.AreEqual(2, module.ActiveWakeSegmentCount);
+            Assert.Less(module.RenderData.GetWakeA(1).z, 0f);
+            Assert.Less(module.RenderData.GetWakeA(1).x, module.RenderData.GetWakeA(0).x);
+        }
+
+        [Test]
+        public void WakeVariationIsStableAndRingFoamDataCoexists()
+        {
+            var first = CreateWakeModule(16, 16);
+            var second = CreateWakeModule(16, 16);
+            Assert.IsTrue(first.AddRing(Vector2.one, 1f, 0.2f));
+            Assert.IsTrue(first.UpdateContactFoam(42, Vector2.one, 0.5f, 0.5f, 1f));
+            first.UpdateWake(7, Vector2.zero, 0.5f, 1f);
+            second.UpdateWake(7, Vector2.zero, 0.5f, 1f);
+            first.UpdateWake(7, Vector2.right, 0.5f, 1f);
+            second.UpdateWake(7, Vector2.right, 0.5f, 1f);
+
+            Assert.AreEqual(1, first.RenderData.ActiveRingCount);
+            Assert.AreEqual(1, first.RenderData.ActiveContactFoamCount);
+            Assert.AreEqual(1, first.RenderData.ActiveWakeCount);
+            Assert.AreEqual(first.RenderData.GetWakeB(0).w, second.RenderData.GetWakeB(0).w, 0.0001f);
+            Assert.AreEqual(Vector2.one.x, first.RenderData.GetRingA(0).x, 0.0001f);
+            Assert.AreEqual(Vector2.one.y, first.RenderData.GetRingA(0).y, 0.0001f);
+            Assert.AreEqual(Vector2.one.x, first.RenderData.GetFoamA(0).x, 0.0001f);
+        }
+
+        [Test]
+        public void MultipleLogicalBodiesKeepIndependentWakeAccumulators()
+        {
+            var module = CreateWakeModule(16, 16);
+            module.UpdateWake(1, Vector2.zero, 0.5f, 1f);
+            module.UpdateWake(2, Vector2.zero, 0.5f, 1f);
+            module.UpdateWake(1, Vector2.right, 0.5f, 1f);
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+            module.UpdateWake(2, Vector2.right * 0.5f, 0.5f, 1f);
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+            module.UpdateWake(2, Vector2.right, 0.5f, 1f);
+            Assert.AreEqual(2, module.ActiveWakeSegmentCount);
+        }
+
+        [Test]
+        public void ReleasedWakeBodyDropsAccumulatorWhileExistingSegmentsFade()
+        {
+            var style = WakeStyle();
+            style.WakeLifetime = 1f;
+            var module = new WaterSurfacePresentationModule();
+            module.Configure(WakeQuality(16, 16), style);
+            module.UpdateWake(9, Vector2.zero, 0.5f, 1f);
+            module.UpdateWake(9, Vector2.right, 0.5f, 1f);
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+
+            Assert.IsTrue(module.ReleaseWakeBody(9));
+            Assert.IsFalse(module.TryGetWakeDistanceRemainder(9, out _));
+            Assert.AreEqual(1, module.ActiveWakeSegmentCount);
+            Assert.IsTrue(module.Tick(1f));
+            Assert.AreEqual(0, module.ActiveWakeSegmentCount);
         }
 
         [Test]
@@ -273,6 +533,10 @@ namespace Water25D.Tests
             Assert.AreEqual(8, quality.MaximumSurfaceRings);
             Assert.AreEqual(4, quality.MaximumContactFoams);
             Assert.AreEqual(8, quality.MaximumTrackedSurfaceBodies);
+            Assert.AreEqual(WaterQualitySettings.Default.MaximumWakeSegments, quality.MaximumWakeSegments);
+            Assert.AreEqual(WaterQualitySettings.Default.MaximumWakeEmissionsPerStep, quality.MaximumWakeEmissionsPerStep);
+            Assert.AreEqual(defaultStyle.WakeEmissionSpacing, style.WakeEmissionSpacing, 0.0001f);
+            Assert.AreEqual(defaultStyle.WakeLifetime, style.WakeLifetime, 0.0001f);
         }
 
         [Test]
@@ -296,6 +560,41 @@ namespace Water25D.Tests
             {
                 Object.DestroyImmediate(root);
             }
+        }
+
+        private static WaterSurfacePresentationModule CreateWakeModule(int maximumWakeSegments, int maximumWakeEmissionsPerStep)
+        {
+            var module = new WaterSurfacePresentationModule();
+            module.Configure(WakeQuality(maximumWakeSegments, maximumWakeEmissionsPerStep), WakeStyle());
+            return module;
+        }
+
+        private static WaterQualitySettings WakeQuality(int maximumWakeSegments, int maximumWakeEmissionsPerStep)
+        {
+            var quality = WaterQualitySettings.Default;
+            quality.MaximumWakeSegments = maximumWakeSegments;
+            quality.MaximumWakeEmissionsPerStep = maximumWakeEmissionsPerStep;
+            quality.MaximumContactFoams = 8;
+            quality.MaximumSurfaceRings = 16;
+            quality.Sanitize();
+            return quality;
+        }
+
+        private static WaterStyleSettings WakeStyle()
+        {
+            var style = WaterStyleSettings.Default;
+            style.WakeEmissionSpacing = 1f;
+            style.WakeMinimumLateralSpeed = 0.1f;
+            style.WakeWidthMultiplier = 1f;
+            style.WakeWidthPadding = 0f;
+            style.WakeMinimumHalfWidth = 0.05f;
+            style.WakeMaximumHalfWidth = 1f;
+            style.WakeLifetime = 2f;
+            style.WakeFadePower = 1f;
+            style.WakeIntensity = 1f;
+            style.WakeDirectionReversalAngle = 120f;
+            style.Sanitize();
+            return style;
         }
     }
 }

@@ -72,6 +72,23 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawWakeFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water Style Distance-Spaced Wakes", delegate
+            {
+                Property(serializedObject, "_wakeEmissionSpacing", "Emission Spacing", "World-space distance between accepted wake segment centres.");
+                Property(serializedObject, "_wakeMinimumLateralSpeed", "Minimum Lateral Speed", "Minimum accepted surface speed in world units per second.");
+                Property(serializedObject, "_wakeWidthMultiplier", "Width Multiplier", "Multiplier applied to the aggregate logical-body half width.");
+                Property(serializedObject, "_wakeWidthPadding", "Width Padding", "Additional local half-width applied after the body-width multiplier.");
+                Property(serializedObject, "_wakeMinimumHalfWidth", "Minimum Half Width", "Lower clamp for the analytical wake capsule half width.");
+                Property(serializedObject, "_wakeMaximumHalfWidth", "Maximum Half Width", "Upper clamp for the analytical wake capsule half width.");
+                Property(serializedObject, "_wakeLifetime", "Lifetime", "Seconds before a wake segment expires.");
+                Property(serializedObject, "_wakeFadePower", "Fade Power", "Age fade exponent used by the top and front analytical wake shaders.");
+                Property(serializedObject, "_wakeIntensity", "Intensity", "Maximum wake contribution before speed normalization.");
+                Property(serializedObject, "_wakeDirectionReversalAngle", "Reversal Angle", "Direction change angle that resets the accumulator and prevents a bridge segment.");
+            });
+        }
+
         public static bool DrawMaterialFields(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water Style Material Templates", delegate
@@ -171,6 +188,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Contact Ripples", false, DrawRippleFields);
             DrawStandaloneSection(serializedObject, "Procedural Surface Rings", false, DrawRingFields);
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
+            DrawStandaloneSection(serializedObject, "Distance-Spaced Wakes", false, DrawWakeFields);
             DrawStandaloneSection(serializedObject, "Material Templates", false, DrawMaterialFields);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

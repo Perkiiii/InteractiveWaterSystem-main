@@ -26,6 +26,16 @@ namespace Water25D
         public float ContactFoamIntensity;
         public float ContactFoamFadeDuration;
         public float FoamReflectionOcclusion;
+        public float WakeEmissionSpacing;
+        public float WakeMinimumLateralSpeed;
+        public float WakeWidthMultiplier;
+        public float WakeWidthPadding;
+        public float WakeMinimumHalfWidth;
+        public float WakeMaximumHalfWidth;
+        public float WakeLifetime;
+        public float WakeFadePower;
+        public float WakeIntensity;
+        public float WakeDirectionReversalAngle;
 
         public static WaterStyleSettings Default => new WaterStyleSettings
         {
@@ -48,7 +58,17 @@ namespace Water25D
             ContactFoamSoftness = 0.06f,
             ContactFoamIntensity = 0.85f,
             ContactFoamFadeDuration = 0.35f,
-            FoamReflectionOcclusion = 0.85f
+            FoamReflectionOcclusion = 0.85f,
+            WakeEmissionSpacing = 0.75f,
+            WakeMinimumLateralSpeed = 0.5f,
+            WakeWidthMultiplier = 0.9f,
+            WakeWidthPadding = 0.02f,
+            WakeMinimumHalfWidth = 0.05f,
+            WakeMaximumHalfWidth = 0.35f,
+            WakeLifetime = 1.35f,
+            WakeFadePower = 1.25f,
+            WakeIntensity = 0.45f,
+            WakeDirectionReversalAngle = 120f
         };
 
         public void Sanitize()
@@ -68,6 +88,18 @@ namespace Water25D
             ContactFoamIntensity = IsFinite(ContactFoamIntensity) ? Mathf.Clamp01(ContactFoamIntensity) : Default.ContactFoamIntensity;
             ContactFoamFadeDuration = SanitizePositive(ContactFoamFadeDuration, Default.ContactFoamFadeDuration, 0.01f, 5f);
             FoamReflectionOcclusion = IsFinite(FoamReflectionOcclusion) ? Mathf.Clamp01(FoamReflectionOcclusion) : Default.FoamReflectionOcclusion;
+            WakeEmissionSpacing = SanitizePositive(WakeEmissionSpacing, Default.WakeEmissionSpacing, 0.01f, 10f);
+            WakeMinimumLateralSpeed = SanitizeNonNegative(WakeMinimumLateralSpeed, Default.WakeMinimumLateralSpeed, 0f, 100f);
+            WakeWidthMultiplier = SanitizeNonNegative(WakeWidthMultiplier, Default.WakeWidthMultiplier, 0f, 4f);
+            WakeWidthPadding = SanitizeNonNegative(WakeWidthPadding, Default.WakeWidthPadding, 0f, 2f);
+            WakeMinimumHalfWidth = SanitizePositive(WakeMinimumHalfWidth, Default.WakeMinimumHalfWidth, 0.001f, 2f);
+            WakeMaximumHalfWidth = SanitizePositive(WakeMaximumHalfWidth, Default.WakeMaximumHalfWidth, WakeMinimumHalfWidth, 4f);
+            WakeLifetime = SanitizePositive(WakeLifetime, Default.WakeLifetime, 0.01f, 60f);
+            WakeFadePower = SanitizePositive(WakeFadePower, Default.WakeFadePower, 0.1f, 4f);
+            WakeIntensity = IsFinite(WakeIntensity) ? Mathf.Clamp01(WakeIntensity) : Default.WakeIntensity;
+            WakeDirectionReversalAngle = IsFinite(WakeDirectionReversalAngle)
+                ? Mathf.Clamp(WakeDirectionReversalAngle, 90f, 179f)
+                : Default.WakeDirectionReversalAngle;
             if (AmbientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 AmbientWaveDirection = Vector2.right;
@@ -102,6 +134,7 @@ namespace Water25D
             block.SetFloat(WaterShaderIds.RippleHeightOffset, 0f);
             block.SetFloat(WaterShaderIds.SurfaceFoamSoftness, ContactFoamSoftness);
             block.SetFloat(WaterShaderIds.FoamReflectionOcclusion, FoamReflectionOcclusion);
+            block.SetFloat(WaterShaderIds.WakeFadePower, WakeFadePower);
         }
 
         public bool Equals(WaterStyleSettings other)
@@ -125,7 +158,17 @@ namespace Water25D
                    Mathf.Approximately(ContactFoamSoftness, other.ContactFoamSoftness) &&
                    Mathf.Approximately(ContactFoamIntensity, other.ContactFoamIntensity) &&
                    Mathf.Approximately(ContactFoamFadeDuration, other.ContactFoamFadeDuration) &&
-                   Mathf.Approximately(FoamReflectionOcclusion, other.FoamReflectionOcclusion);
+                   Mathf.Approximately(FoamReflectionOcclusion, other.FoamReflectionOcclusion) &&
+                   Mathf.Approximately(WakeEmissionSpacing, other.WakeEmissionSpacing) &&
+                   Mathf.Approximately(WakeMinimumLateralSpeed, other.WakeMinimumLateralSpeed) &&
+                   Mathf.Approximately(WakeWidthMultiplier, other.WakeWidthMultiplier) &&
+                   Mathf.Approximately(WakeWidthPadding, other.WakeWidthPadding) &&
+                   Mathf.Approximately(WakeMinimumHalfWidth, other.WakeMinimumHalfWidth) &&
+                   Mathf.Approximately(WakeMaximumHalfWidth, other.WakeMaximumHalfWidth) &&
+                   Mathf.Approximately(WakeLifetime, other.WakeLifetime) &&
+                   Mathf.Approximately(WakeFadePower, other.WakeFadePower) &&
+                   Mathf.Approximately(WakeIntensity, other.WakeIntensity) &&
+                   Mathf.Approximately(WakeDirectionReversalAngle, other.WakeDirectionReversalAngle);
         }
 
         public override bool Equals(object obj)
@@ -156,7 +199,17 @@ namespace Water25D
                 hash = hash * 31 + ContactFoamSoftness.GetHashCode();
                 hash = hash * 31 + ContactFoamIntensity.GetHashCode();
                 hash = hash * 31 + ContactFoamFadeDuration.GetHashCode();
-                return hash * 31 + FoamReflectionOcclusion.GetHashCode();
+                hash = hash * 31 + FoamReflectionOcclusion.GetHashCode();
+                hash = hash * 31 + WakeEmissionSpacing.GetHashCode();
+                hash = hash * 31 + WakeMinimumLateralSpeed.GetHashCode();
+                hash = hash * 31 + WakeWidthMultiplier.GetHashCode();
+                hash = hash * 31 + WakeWidthPadding.GetHashCode();
+                hash = hash * 31 + WakeMinimumHalfWidth.GetHashCode();
+                hash = hash * 31 + WakeMaximumHalfWidth.GetHashCode();
+                hash = hash * 31 + WakeLifetime.GetHashCode();
+                hash = hash * 31 + WakeFadePower.GetHashCode();
+                hash = hash * 31 + WakeIntensity.GetHashCode();
+                return hash * 31 + WakeDirectionReversalAngle.GetHashCode();
             }
         }
 
@@ -219,6 +272,18 @@ namespace Water25D
         [Min(0.01f)] [SerializeField] private float _contactFoamFadeDuration = 0.35f;
         [Range(0f, 1f)] [SerializeField] private float _foamReflectionOcclusion = 0.85f;
 
+        [Header("Distance-Spaced Wakes")]
+        [Min(0.01f)] [SerializeField] private float _wakeEmissionSpacing = 0.75f;
+        [Min(0f)] [SerializeField] private float _wakeMinimumLateralSpeed = 0.5f;
+        [Min(0f)] [SerializeField] private float _wakeWidthMultiplier = 0.9f;
+        [Min(0f)] [SerializeField] private float _wakeWidthPadding = 0.02f;
+        [Min(0.001f)] [SerializeField] private float _wakeMinimumHalfWidth = 0.05f;
+        [Min(0.001f)] [SerializeField] private float _wakeMaximumHalfWidth = 0.35f;
+        [Min(0.01f)] [SerializeField] private float _wakeLifetime = 1.35f;
+        [Min(0.1f)] [SerializeField] private float _wakeFadePower = 1.25f;
+        [Range(0f, 1f)] [SerializeField] private float _wakeIntensity = 0.45f;
+        [Range(90f, 179f)] [SerializeField] private float _wakeDirectionReversalAngle = 120f;
+
         [Header("Optional Material Templates")]
         [Tooltip("Optional project or package-owned template. It is never mutated at runtime.")]
         [SerializeField] private Material _topMaterialTemplate;
@@ -251,7 +316,17 @@ namespace Water25D
                 ContactFoamSoftness = _contactFoamSoftness,
                 ContactFoamIntensity = _contactFoamIntensity,
                 ContactFoamFadeDuration = _contactFoamFadeDuration,
-                FoamReflectionOcclusion = _foamReflectionOcclusion
+                FoamReflectionOcclusion = _foamReflectionOcclusion,
+                WakeEmissionSpacing = _wakeEmissionSpacing,
+                WakeMinimumLateralSpeed = _wakeMinimumLateralSpeed,
+                WakeWidthMultiplier = _wakeWidthMultiplier,
+                WakeWidthPadding = _wakeWidthPadding,
+                WakeMinimumHalfWidth = _wakeMinimumHalfWidth,
+                WakeMaximumHalfWidth = _wakeMaximumHalfWidth,
+                WakeLifetime = _wakeLifetime,
+                WakeFadePower = _wakeFadePower,
+                WakeIntensity = _wakeIntensity,
+                WakeDirectionReversalAngle = _wakeDirectionReversalAngle
             };
             settings.Sanitize();
             return settings;
@@ -275,6 +350,16 @@ namespace Water25D
             _contactFoamIntensity = settings.ContactFoamIntensity;
             _contactFoamFadeDuration = settings.ContactFoamFadeDuration;
             _foamReflectionOcclusion = settings.FoamReflectionOcclusion;
+            _wakeEmissionSpacing = settings.WakeEmissionSpacing;
+            _wakeMinimumLateralSpeed = settings.WakeMinimumLateralSpeed;
+            _wakeWidthMultiplier = settings.WakeWidthMultiplier;
+            _wakeWidthPadding = settings.WakeWidthPadding;
+            _wakeMinimumHalfWidth = settings.WakeMinimumHalfWidth;
+            _wakeMaximumHalfWidth = settings.WakeMaximumHalfWidth;
+            _wakeLifetime = settings.WakeLifetime;
+            _wakeFadePower = settings.WakeFadePower;
+            _wakeIntensity = settings.WakeIntensity;
+            _wakeDirectionReversalAngle = settings.WakeDirectionReversalAngle;
             if (_ambientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 _ambientWaveDirection = Vector2.right;

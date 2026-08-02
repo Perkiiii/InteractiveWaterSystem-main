@@ -146,6 +146,9 @@ namespace Water25D
         public int ActiveContactFoamCount => _surfacePresentation != null ? _surfacePresentation.ActiveContactFoamCount : 0;
         public int FadingContactFoamCount => _surfacePresentation != null ? _surfacePresentation.FadingContactFoamCount : 0;
         public int DroppedContactFoamCount => _surfacePresentation != null ? _surfacePresentation.DroppedContactFoamCount : 0;
+        public int ActiveWakeSegmentCount => _surfacePresentation != null ? _surfacePresentation.ActiveWakeSegmentCount : 0;
+        public int ReplacedWakeSegmentCount => _surfacePresentation != null ? _surfacePresentation.ReplacedWakeCount : 0;
+        public int DroppedWakeBodyCount => _surfacePresentation != null ? _surfacePresentation.DroppedWakeBodyCount : 0;
         public int TrackedSurfaceBodyCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.LogicalContactCount : 0;
         public int DroppedTrackedSurfaceBodyCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.DroppedTrackedBodyCount : 0;
         public int SurfaceColliderSampleOverflowCount => _hierarchy?.SurfaceInteraction != null ? _hierarchy.SurfaceInteraction.ColliderSampleOverflowCount : 0;
@@ -502,6 +505,53 @@ namespace Water25D
             {
                 UploadSurfacePresentation();
             }
+        }
+
+        /// <summary>
+        /// Maps one qualified logical surface contact into the presentation module's local-XZ
+        /// wake stream. The presentation module owns the accumulator and only emits in the flat
+        /// mode; physics never writes wake shader arrays directly.
+        /// </summary>
+        internal void UpdateSurfaceWake(
+            int bodyKey,
+            Vector2 worldContactCenter,
+            float worldContactWidth,
+            float fixedDeltaTime)
+        {
+            if (_surfaceMode != WaterSurfaceMode.FlatStylized || _surfacePresentation == null ||
+                !IsFinite(worldContactCenter.x) || !IsFinite(worldContactCenter.y) ||
+                !IsFinite(worldContactWidth) || worldContactWidth < 0f)
+            {
+                ReleaseSurfaceWake(bodyKey);
+                return;
+            }
+
+            if (!TryGetInteractionWorldPositionForContact(worldContactCenter, out var worldCenter) ||
+                !TryGetSurfaceLocalXZ(worldCenter, out var localCenter))
+            {
+                ReleaseSurfaceWake(bodyKey);
+                return;
+            }
+
+            var halfWorldWidth = worldContactWidth * 0.5f;
+            var localLeft = transform.InverseTransformPoint(worldCenter + Vector3.left * halfWorldWidth);
+            var localRight = transform.InverseTransformPoint(worldCenter + Vector3.right * halfWorldWidth);
+            var localWidth = Mathf.Abs(localRight.x - localLeft.x);
+            if (!IsFinite(localWidth))
+            {
+                ReleaseSurfaceWake(bodyKey);
+                return;
+            }
+
+            if (_surfacePresentation.UpdateWake(bodyKey, localCenter, localWidth * 0.5f, fixedDeltaTime))
+            {
+                UploadSurfacePresentation();
+            }
+        }
+
+        internal void ReleaseSurfaceWake(int bodyKey)
+        {
+            _surfacePresentation?.ReleaseWakeBody(bodyKey);
         }
 
         private void ApplyAuthoringChanges()

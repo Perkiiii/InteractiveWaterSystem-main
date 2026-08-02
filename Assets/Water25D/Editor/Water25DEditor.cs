@@ -202,7 +202,7 @@ namespace Water25D.Editor
             var flatMode = GetSurfaceMode() == WaterSurfaceMode.FlatStylized;
             EditorGUILayout.HelpBox(
                 flatMode
-                    ? "Procedural surface rings active. FlatStylized does not allocate or update the CRT; contact foam, wakes and splash redesign remain separate slices."
+                    ? "Procedural rings, contact foam and distance-spaced wakes are active. FlatStylized does not allocate or update the CRT; painterly interaction masks and splash redesign remain separate slices."
                     : "SimulatedRipples uses the instance-owned CRT for surface impacts. Procedural surface rings are inactive in this mode.",
                 MessageType.Info);
 

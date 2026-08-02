@@ -156,6 +156,57 @@ No sample scene, profile asset, material asset, prefab, package manifest, projec
 
 No sample scene, profile asset, material asset, prefab, package manifest, project setting, or legacy/reference-system file was changed for this slice.
 
+### Flat-stylized distance-spaced wake segment slice
+
+- Added fixed-capacity wake state to the existing `WaterSurfacePresentationModule`. The module owns 16 compile-time wake slots and preallocated `_WaterWakesA`/`_WaterWakesB` upload arrays; the default quality profile activates eight slots. Per-logical-body wake accumulators use the existing fixed body-capacity boundary and are keyed by the existing `WaterSurfaceContactSample.BodyKey`.
+- Qualified wake samples flow through `WaterSurfaceInteraction2D` and `Water25DController`: only a body that crossed downward through the waterline and remains straddling it can emit. Stationary initial contact, side entry, entry from below, fully submerged/above bodies, invalid samples, non-flat mode, and out-of-bounds mappings do not emit.
+- Emission is based on traveled local XZ surface distance. The module stores the last accepted position and fractional spacing remainder, interpolates each accepted emission along the sampled path, and caps emissions per physics step. The bounded catch-up policy retains only the fractional remainder after a capped step and discards whole skipped spacing intervals, preventing an unbounded later burst.
+- Direction reversal uses the configured angle threshold. A reversal retains existing segments, resets the body accumulator and anchor phase, and emits no bridge segment across the reversal. Tiny or below-threshold movement updates the accepted anchor without generating a wake.
+- Wake width is derived from aggregate logical-body contact half-width, multiplied/padded by the style profile, and clamped. Intensity is deterministic speed normalization; each segment receives a stable phase from its body key and wake-local creation sequence, independent of ring or contact-foam creation order.
+- Replacement order is deterministic: free slots first, then expired slots, then fading slots with lowest intensity and oldest sequence, then the oldest live slot. The newest live segment is protected whenever an older candidate exists. Reclamation/replacement and dropped-body diagnostics are exposed through the controller without growing storage.
+- Wake age and fade are independent of the contact accumulator. Final contact exit, full submersion, invalid/destroyed body cleanup, disable/destroy, mode changes, and presentation resize clear emission ownership as appropriate while existing segments either fade or are cleared according to the established lifecycle policy. Mode changes upload zero analytical wake count in `SimulatedRipples`.
+- Added bounded analytic capsule evaluation to the existing top shader and a shared-array, narrow front-seam evaluation only where a wake reaches/intersects the front plane. The surface remains geometrically flat and no new renderer, material, mesh, particle, decal, or draw call is created.
+
+Exact files changed for this bounded wake slice:
+
+- `Assets/Water25D/Runtime/Core/Water25DController.cs`.
+- `Assets/Water25D/Runtime/Core/WaterRenderingModule.cs`.
+- `Assets/Water25D/Runtime/Physics/WaterSurfaceInteraction2D.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterShaderIds.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfacePresentationModule.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfaceRenderData.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterQualityProfile.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterStyleProfile.cs`.
+- `Assets/Water25D/Editor/Water25DEditor.cs`.
+- `Assets/Water25D/Editor/WaterQualityProfileEditor.cs`.
+- `Assets/Water25D/Editor/WaterStyleProfileEditor.cs`.
+- `Assets/Water25D/Shaders/Water25D_TopSurface.shader`.
+- `Assets/Water25D/Shaders/Water25D_FrontSurface.shader`.
+- `Assets/Water25D/Tests/EditMode/WaterControllerEditModeTests.cs`.
+- `Assets/Water25D/Tests/EditMode/WaterSurfacePresentationTests.cs`.
+- `Assets/Water25D/Tests/PlayMode/WaterControllerPlayModeTests.cs`.
+- `Assets/Water25D/Documentation/STATUS.md`.
+
+Wake profile controls added in this slice:
+
+- Quality: `MaximumWakeSegments` (default 8, clamp 1–16) and `MaximumWakeEmissionsPerStep` (default 2, clamp 1–16).
+- Style: spacing 0.75 world units, minimum lateral speed 0.5 world units/second, width multiplier 0.9, width padding 0.02, half-width clamp 0.05–0.35, lifetime 1.35 seconds, fade power 1.25, intensity 0.45, and reversal angle 120 degrees. All values are sanitized and participate in equality/hash behavior.
+
+Validation for this wake slice:
+
+- Focused EditMode and PlayMode tests were added for profile sanitation/equality, fixed storage, distance interpolation/remainder/cap, thresholds, finite input, width, aging, expired reuse, deterministic replacement/newest protection, stable phase, reversal, logical-body independence/cleanup, mode/resize clearing, ring/foam/wake coexistence, simulated zero wake count, multi-collider contact, submersion/exit, disable, resize, and destroyed-body cleanup.
+- The new Unity test suites were not executed in this checkout: `UNITY_PATH` is unset, `Unity.exe` and `UnityHub.exe` are not on `PATH`, and no Unity MCP test runner is available. This is a no-result condition, not a pass or failure. The last completed baseline recorded above remains 55/55 EditMode and 9/9 PlayMode before this wake slice.
+- Static validation performed after implementation: complete changed-file diff inspection, balanced-source audit, `git diff --check`, `git status --short`, and the package dependency scan. The dependency scan found only the pre-existing intentional documentation portability matches; no runtime/editor wake dependency references a reference-only system.
+
+Manual validation still required for this slice:
+
+- Open `Assets/Water25D/Samples/Water25D_VisualFlat.unity`, select `Water25D_FlatTest`, enter Play Mode, and verify stationary initial contact and slow lateral contact produce no wake, while qualified fast lateral movement produces restrained distance-spaced capsules on the top.
+- Use a multi-collider body and two separate bodies. Confirm one stream per logical Rigidbody2D, aggregate width behavior, no duplicate collider emissions, and independent accumulators.
+- Reverse direction during contact and confirm no long bridge segment. Drive the body fully below the surface and through its final trigger exit; confirm no new segments are emitted and existing segments fade. Destroy a contacted body and repeat the cleanup check.
+- Exceed the active capacity and inspect deterministic oldest/fading replacement, newest-segment protection, and the wake count/arrays on both top and front renderers. Confirm the front contribution appears only in the narrow seam when a segment reaches the front plane.
+- Switch to `SimulatedRipples`, resize, disable/re-enable, and destroy the controller. Confirm analytical wake count uploads zero in simulated mode, CRT routing remains intact, and no stale wake data survives lifecycle transitions.
+- Inspect the Console and shader compiler for this slice, and use the Frame Debugger/Profiler only to verify no extra wake draw or obvious allocation/resource churn if the required Unity environment is available. No performance claim is made here.
+
 ## Package boundaries
 
 The Water25D runtime and editor assemblies have no code dependency on `Assets/InteractiveWaterSystem/`, `Assets/Cainos/`, `Assets/DemoScenes/`, or Lucid Editor. Unity MCP is development tooling and is not referenced by the package code.
@@ -204,7 +255,7 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - A post-correction capture of the six collapsed top-level bars has not yet been produced.
 - Full multi-selection/prefab-stage authoring review, measured profiler capture, and target-device validation remain outstanding.
 - Gameplay-camera-aware visibility scheduling and vertical-crossing-weighted impact strength remain follow-up work.
-- Distance-based wakes, wake segments, splash entry/exit variants, splash size tiers, and new splash assets remain intentionally unimplemented.
+- Splash entry/exit variants, splash size tiers, and new splash assets remain intentionally unimplemented. The distance-spaced wake implementation is present above, but Unity execution and visual validation remain outstanding in this checkout.
 - Automatic project layer, sorting-layer, URP renderer-feature, or Camera Sorting Layer Texture setup.
 
 ### Flat-mode manual validation still required
@@ -256,7 +307,7 @@ Project-level rendering and sorting configuration is intentionally not modified 
 The active flat-stylized redesign milestone was advanced by this bounded slice but is not complete. The next bounded task is:
 
 ```text
-Implement fixed-capacity distance-spaced wake segments for qualified moving surface contacts, preserving rings, contact foam, and simulated CRT behavior.
+Rendering ownership and painterly interaction framework
 ```
 
 Full prefab-stage, multi-selection, clean-project portability, measured profiling, target-device validation, and the remaining flat presentation features remain follow-up work.

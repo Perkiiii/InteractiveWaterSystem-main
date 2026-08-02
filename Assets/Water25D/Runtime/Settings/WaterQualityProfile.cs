@@ -23,6 +23,8 @@ namespace Water25D
         public int MaximumSurfaceRings;
         public int MaximumContactFoams;
         public int MaximumTrackedSurfaceBodies;
+        public int MaximumWakeSegments;
+        public int MaximumWakeEmissionsPerStep;
 
         public static WaterQualitySettings Default => new WaterQualitySettings
         {
@@ -42,7 +44,9 @@ namespace Water25D
             AmbientWaveBands = 3,
             MaximumSurfaceRings = 8,
             MaximumContactFoams = 4,
-            MaximumTrackedSurfaceBodies = 8
+            MaximumTrackedSurfaceBodies = 8,
+            MaximumWakeSegments = 8,
+            MaximumWakeEmissionsPerStep = 2
         };
 
         public void Sanitize()
@@ -66,6 +70,8 @@ namespace Water25D
             MaximumSurfaceRings = Mathf.Clamp(MaximumSurfaceRings, 1, 16);
             MaximumContactFoams = Mathf.Clamp(MaximumContactFoams, 1, 8);
             MaximumTrackedSurfaceBodies = Mathf.Clamp(MaximumTrackedSurfaceBodies, 1, 16);
+            MaximumWakeSegments = Mathf.Clamp(MaximumWakeSegments, 1, 16);
+            MaximumWakeEmissionsPerStep = Mathf.Clamp(MaximumWakeEmissionsPerStep, 1, 16);
         }
 
         public Vector2Int CalculateRippleResolution(Vector2 topSurfaceSize)
@@ -100,7 +106,9 @@ namespace Water25D
                    Mathf.Approximately(TopVerticesPerUnit, other.TopVerticesPerUnit) &&
                    MaximumSurfaceRings == other.MaximumSurfaceRings &&
                    MaximumContactFoams == other.MaximumContactFoams &&
-                   MaximumTrackedSurfaceBodies == other.MaximumTrackedSurfaceBodies;
+                   MaximumTrackedSurfaceBodies == other.MaximumTrackedSurfaceBodies &&
+                   MaximumWakeSegments == other.MaximumWakeSegments &&
+                   MaximumWakeEmissionsPerStep == other.MaximumWakeEmissionsPerStep;
         }
 
         public override bool Equals(object obj)
@@ -128,7 +136,9 @@ namespace Water25D
                 hash = hash * 31 + AmbientWaveBands;
                 hash = hash * 31 + MaximumSurfaceRings;
                 hash = hash * 31 + MaximumContactFoams;
-                return hash * 31 + MaximumTrackedSurfaceBodies;
+                hash = hash * 31 + MaximumTrackedSurfaceBodies;
+                hash = hash * 31 + MaximumWakeSegments;
+                return hash * 31 + MaximumWakeEmissionsPerStep;
             }
         }
     }
@@ -161,6 +171,8 @@ namespace Water25D
         [Header("Flat-Stylized Interaction")]
         [Range(1, 8)] [SerializeField] private int _maximumContactFoams = 4;
         [Range(1, 16)] [SerializeField] private int _maximumTrackedSurfaceBodies = 8;
+        [Range(1, 16)] [SerializeField] private int _maximumWakeSegments = 8;
+        [Range(1, 16)] [SerializeField] private int _maximumWakeEmissionsPerStep = 2;
 
         [Header("Geometry")]
         [Min(0.5f)] [SerializeField] private float _topVerticesPerUnit = 8f;
@@ -191,7 +203,13 @@ namespace Water25D
                     : WaterQualitySettings.Default.MaximumContactFoams,
                 MaximumTrackedSurfaceBodies = _maximumTrackedSurfaceBodies > 0
                     ? _maximumTrackedSurfaceBodies
-                    : WaterQualitySettings.Default.MaximumTrackedSurfaceBodies
+                    : WaterQualitySettings.Default.MaximumTrackedSurfaceBodies,
+                MaximumWakeSegments = _maximumWakeSegments > 0
+                    ? _maximumWakeSegments
+                    : WaterQualitySettings.Default.MaximumWakeSegments,
+                MaximumWakeEmissionsPerStep = _maximumWakeEmissionsPerStep > 0
+                    ? _maximumWakeEmissionsPerStep
+                    : WaterQualitySettings.Default.MaximumWakeEmissionsPerStep
             };
             settings.Sanitize();
             return settings;
@@ -217,6 +235,8 @@ namespace Water25D
             _maximumSurfaceRings = settings.MaximumSurfaceRings;
             _maximumContactFoams = settings.MaximumContactFoams;
             _maximumTrackedSurfaceBodies = settings.MaximumTrackedSurfaceBodies;
+            _maximumWakeSegments = settings.MaximumWakeSegments;
+            _maximumWakeEmissionsPerStep = settings.MaximumWakeEmissionsPerStep;
         }
     }
 }

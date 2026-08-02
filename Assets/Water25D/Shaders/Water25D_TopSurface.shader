@@ -13,6 +13,8 @@ Shader "Water25D/Top Surface"
         _WaterFoamCount("Contact Foam Count", Float) = 0
         _WaterFoamSoftness("Contact Foam Softness", Float) = 0.06
         _FoamReflectionOcclusion("Foam Reflection Occlusion", Range(0, 1)) = 0.85
+        _WaterWakeCount("Wake Segment Count", Float) = 0
+        _WakeFadePower("Wake Fade Power", Float) = 1.25
         _WaveAmplitude("Ambient Wave Amplitude", Float) = 0.06
         _WaveLength("Ambient Wave Length", Float) = 3.5
         _WaveSpeed("Ambient Wave Speed", Float) = 0.8
@@ -49,6 +51,7 @@ Shader "Water25D/Top Surface"
 
         #define WATER_MAX_RINGS 16
         #define WATER_MAX_CONTACT_FOAMS 8
+        #define WATER_MAX_WAKES 16
 
         CBUFFER_START(UnityPerMaterial)
             half4 _BaseColor;
@@ -65,6 +68,10 @@ Shader "Water25D/Top Surface"
             float4 _WaterFoamsB[WATER_MAX_CONTACT_FOAMS];
             float _WaterFoamSoftness;
             float _FoamReflectionOcclusion;
+            float _WaterWakeCount;
+            float4 _WaterWakesA[WATER_MAX_WAKES];
+            float4 _WaterWakesB[WATER_MAX_WAKES];
+            float _WakeFadePower;
             float _WaveAmplitude;
             float _WaveLength;
             float _WaveSpeed;
@@ -119,6 +126,54 @@ Shader "Water25D/Top Surface"
                 float contactAmount = lerp(0.72, 1.0, saturate(foamB.z));
                 float contribution = ellipse * saturate(breakup) * saturate(foamA.w) * saturate(foamB.y) * contactAmount;
                 accumulation = saturate(accumulation + contribution);
+            }
+
+            return accumulation;
+        }
+
+        float EvaluateWakeCapsules(float2 localXZ)
+        {
+            if (_SurfaceMode < 0.5 || _WaterWakeCount <= 0.5)
+            {
+                return 0.0;
+            }
+
+            int wakeCount = min((int)_WaterWakeCount, WATER_MAX_WAKES);
+            float accumulation = 0.0;
+            for (int wakeIndex = 0; wakeIndex < WATER_MAX_WAKES; wakeIndex++)
+            {
+                if (wakeIndex >= wakeCount)
+                {
+                    break;
+                }
+
+                float4 wakeA = _WaterWakesA[wakeIndex];
+                float4 wakeB = _WaterWakesB[wakeIndex];
+                float2 start = wakeA.xy;
+                float2 end = wakeA.zw;
+                float halfWidth = max(0.001, wakeB.x);
+                float2 boundsMin = min(start, end) - halfWidth;
+                float2 boundsMax = max(start, end) + halfWidth;
+                if (localXZ.x < boundsMin.x || localXZ.x > boundsMax.x ||
+                    localXZ.y < boundsMin.y || localXZ.y > boundsMax.y)
+                {
+                    continue;
+                }
+
+                float2 segment = end - start;
+                float segmentLengthSq = dot(segment, segment);
+                float along = segmentLengthSq > 0.000001
+                    ? saturate(dot(localXZ - start, segment) / segmentLengthSq)
+                    : 0.0;
+                float2 closest = start + segment * along;
+                float distanceToCapsule = distance(localXZ, closest);
+                float edgeSoftness = max(0.002, halfWidth * 0.45);
+                float capsule = 1.0 - smoothstep(halfWidth, halfWidth + edgeSoftness, distanceToCapsule);
+                float ageFade = pow(saturate(1.0 - wakeB.y), max(0.1, _WakeFadePower));
+                float breakup = 0.86 +
+                    0.14 * sin(dot(localXZ - closest, float2(2.11, 1.37)) + wakeB.w * 6.2831853);
+                float taper = lerp(0.78, 1.0, 1.0 - abs(along * 2.0 - 1.0));
+                accumulation = saturate(accumulation + capsule * ageFade * saturate(wakeB.z) * saturate(breakup) * taper);
             }
 
             return accumulation;
@@ -209,6 +264,10 @@ Shader "Water25D/Top Surface"
                 color.rgb = lerp(color.rgb, _FoamColor.rgb, ringHighlight * 0.55);
                 color.a = saturate(color.a + ringHighlight * 0.12);
             }
+
+            half wake = EvaluateWakeCapsules(localXZ);
+            color.rgb = lerp(color.rgb, _FoamColor.rgb, wake * 0.38);
+            color.a = saturate(color.a + wake * 0.08);
 
             color.rgb = lerp(color.rgb, _FoamColor.rgb, contactFoam * 0.75);
             color.a = saturate(color.a + contactFoam * 0.18);

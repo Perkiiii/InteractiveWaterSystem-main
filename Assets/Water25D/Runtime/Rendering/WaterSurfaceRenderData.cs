@@ -13,21 +13,33 @@ namespace Water25D.Rendering
         private readonly Vector4[] _ringsB;
         private readonly Vector4[] _foamsA;
         private readonly Vector4[] _foamsB;
+        private readonly Vector4[] _wakesA;
+        private readonly Vector4[] _wakesB;
 
-        internal WaterSurfaceRenderData(Vector4[] ringsA, Vector4[] ringsB, Vector4[] foamsA, Vector4[] foamsB)
+        internal WaterSurfaceRenderData(
+            Vector4[] ringsA,
+            Vector4[] ringsB,
+            Vector4[] foamsA,
+            Vector4[] foamsB,
+            Vector4[] wakesA,
+            Vector4[] wakesB)
         {
             _ringsA = ringsA;
             _ringsB = ringsB;
             _foamsA = foamsA;
             _foamsB = foamsB;
+            _wakesA = wakesA;
+            _wakesB = wakesB;
         }
 
         public int ActiveRingCount { get; internal set; }
         public int ActiveContactFoamCount { get; internal set; }
         public int FadingContactFoamCount { get; internal set; }
+        public int ActiveWakeCount { get; internal set; }
 
         public int ShaderArrayLength => _ringsA.Length;
         public int FoamShaderArrayLength => _foamsA.Length;
+        public int WakeShaderArrayLength => _wakesA.Length;
 
         public Vector4 GetRingA(int index)
         {
@@ -49,9 +61,21 @@ namespace Water25D.Rendering
             return _foamsB[index];
         }
 
+        public Vector4 GetWakeA(int index)
+        {
+            return _wakesA[index];
+        }
+
+        public Vector4 GetWakeB(int index)
+        {
+            return _wakesB[index];
+        }
+
         internal Vector4[] RingsA => _ringsA;
         internal Vector4[] RingsB => _ringsB;
         internal Vector4[] FoamsA => _foamsA;
         internal Vector4[] FoamsB => _foamsB;
+        internal Vector4[] WakesA => _wakesA;
+        internal Vector4[] WakesB => _wakesB;
     }
 }

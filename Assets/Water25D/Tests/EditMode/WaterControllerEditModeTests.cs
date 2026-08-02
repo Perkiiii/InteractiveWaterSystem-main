@@ -65,8 +65,10 @@ namespace Water25D.Tests
             Assert.IsTrue(top.HasProperty("_WaterFoamCount"));
             Assert.IsTrue(top.HasProperty("_WaterFoamSoftness"));
             Assert.IsTrue(top.HasProperty("_FoamReflectionOcclusion"));
+            Assert.IsTrue(top.HasProperty("_WaterWakeCount"));
             Assert.IsTrue(front.HasProperty("_WaterFoamCount"));
             Assert.IsTrue(front.HasProperty("_WaterFoamSoftness"));
+            Assert.IsTrue(front.HasProperty("_WaterWakeCount"));
         }
 
         [Test]

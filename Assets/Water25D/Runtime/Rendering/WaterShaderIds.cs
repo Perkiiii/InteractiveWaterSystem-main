@@ -30,6 +30,10 @@ namespace Water25D
         public static readonly int SurfaceFoamsB = Shader.PropertyToID("_WaterFoamsB");
         public static readonly int SurfaceFoamSoftness = Shader.PropertyToID("_WaterFoamSoftness");
         public static readonly int FoamReflectionOcclusion = Shader.PropertyToID("_FoamReflectionOcclusion");
+        public static readonly int SurfaceWakeCount = Shader.PropertyToID("_WaterWakeCount");
+        public static readonly int SurfaceWakesA = Shader.PropertyToID("_WaterWakesA");
+        public static readonly int SurfaceWakesB = Shader.PropertyToID("_WaterWakesB");
+        public static readonly int WakeFadePower = Shader.PropertyToID("_WakeFadePower");
         public static readonly int WaveAmplitude = Shader.PropertyToID("_WaveAmplitude");
         public static readonly int WaveLength = Shader.PropertyToID("_WaveLength");
         public static readonly int WaveSpeed = Shader.PropertyToID("_WaveSpeed");

@@ -140,6 +140,13 @@ namespace Water25D
                     : 0f);
             block.SetVectorArray(WaterShaderIds.SurfaceFoamsA, renderData.FoamsA);
             block.SetVectorArray(WaterShaderIds.SurfaceFoamsB, renderData.FoamsB);
+            block.SetFloat(
+                WaterShaderIds.SurfaceWakeCount,
+                includeContactFoam
+                    ? Mathf.Clamp(renderData.ActiveWakeCount, 0, renderData.WakeShaderArrayLength)
+                    : 0f);
+            block.SetVectorArray(WaterShaderIds.SurfaceWakesA, renderData.WakesA);
+            block.SetVectorArray(WaterShaderIds.SurfaceWakesB, renderData.WakesB);
         }
 
         private static int GetSortingLayerId(string sortingLayerName)

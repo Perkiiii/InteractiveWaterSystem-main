@@ -30,6 +30,7 @@ namespace Water25D
             public SurfaceSide CurrentSurfaceSide;
             public bool DownwardCrossingEmitted;
             public bool UpwardCrossingEmitted;
+            public bool HasQualifiedSurfaceContact;
             public Vector2 CurrentVelocity;
         }
 
@@ -207,16 +208,19 @@ namespace Water25D
 
             EvaluateCrossing(stateIndex, previousBounds, sample.AggregateBounds, velocity, false, sample);
             UpdateContactFoam(sample, velocity);
-
             state = _bodyStates[stateIndex];
+            UpdateWake(sample, state);
+
             if (state.CurrentSurfaceSide == SurfaceSide.Above)
             {
                 state.DownwardCrossingEmitted = false;
                 state.UpwardCrossingEmitted = false;
+                state.HasQualifiedSurfaceContact = false;
             }
             else if (state.CurrentSurfaceSide == SurfaceSide.Below)
             {
                 state.UpwardCrossingEmitted = false;
+                state.HasQualifiedSurfaceContact = false;
             }
 
             _bodyStates[stateIndex] = state;
@@ -263,12 +267,14 @@ namespace Water25D
             if (downward)
             {
                 state.DownwardCrossingEmitted = true;
+                state.HasQualifiedSurfaceContact = true;
                 _bodyStates[stateIndex] = state;
                 EmitQualifiedCrossing(sample, velocity, WaterInteractionEventType.SurfaceEnter);
             }
             else if (upward)
             {
                 state.UpwardCrossingEmitted = true;
+                state.HasQualifiedSurfaceContact = false;
                 _bodyStates[stateIndex] = state;
                 EmitQualifiedCrossing(sample, velocity, WaterInteractionEventType.SurfaceExit);
             }
@@ -329,6 +335,29 @@ namespace Water25D
                 1f);
         }
 
+        private void UpdateWake(WaterSurfaceContactSample sample, SurfaceBodyState state)
+        {
+            if (_water == null || state.CurrentSurfaceSide != SurfaceSide.Straddling ||
+                !state.HasQualifiedSurfaceContact)
+            {
+                _water?.ReleaseSurfaceWake(sample.BodyKey);
+                return;
+            }
+
+            var bounds = sample.AggregateBounds;
+            if (!IsFinite(bounds) || bounds.size.x < 0f)
+            {
+                _water.ReleaseSurfaceWake(sample.BodyKey);
+                return;
+            }
+
+            _water.UpdateSurfaceWake(
+                sample.BodyKey,
+                new Vector2(bounds.center.x, _water.WaterlineWorldY),
+                bounds.size.x,
+                Time.fixedDeltaTime);
+        }
+
         private void RemoveStatesForUntrackedBodies()
         {
             for (var i = _bodyStateCount - 1; i >= 0; i--)
@@ -340,6 +369,7 @@ namespace Water25D
                 }
 
                 _water?.ReleaseSurfaceContactFoam(_bodyStates[i].BodyKey);
+                _water?.ReleaseSurfaceWake(_bodyStates[i].BodyKey);
                 RemoveBodyStateAt(i);
             }
         }
@@ -373,6 +403,12 @@ namespace Water25D
         {
             for (var i = 0; i < _bodyStates.Length; i++)
             {
+                if (_bodyStates[i].Body != null)
+                {
+                    _water?.ReleaseSurfaceContactFoam(_bodyStates[i].BodyKey);
+                    _water?.ReleaseSurfaceWake(_bodyStates[i].BodyKey);
+                }
+
                 _bodyStates[i] = default;
             }
 

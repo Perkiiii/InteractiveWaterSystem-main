@@ -162,6 +162,7 @@ namespace Water25D.Tests
                 InvokeFixedUpdate(surface);
                 Assert.AreEqual(0, entered);
                 Assert.AreEqual(0, exited);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
 
                 body.position = new Vector2(10f, -2f);
                 InvokeFixedUpdate(surface);
@@ -203,8 +204,224 @@ namespace Water25D.Tests
                 Assert.AreEqual(1, entered);
                 Assert.AreEqual(0, controller.ActiveSurfaceRingCount);
                 Assert.AreEqual(0, controller.ActiveContactFoamCount);
+                Assert.AreEqual(0f, GetFloat(controller.TopSurface.GetComponent<MeshRenderer>(), "_WaterWakeCount"), 0.0001f);
                 Assert.IsNotNull(controller.RippleTexture);
                 Assert.AreEqual(1, GetQueuedRippleCount(controller));
+            }
+            finally
+            {
+                Object.Destroy(root);
+                Object.Destroy(bodyObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator QualifiedLateralMovementCreatesOneDistanceSpacedWakeStreamForMultiColliderBody()
+        {
+            var root = new GameObject("Water Qualified Wake Test");
+            var bodyObject = new GameObject("Water Multi Collider Wake Body");
+            try
+            {
+                var controller = root.AddComponent<Water25DController>();
+                controller.SetSurfaceMode(WaterSurfaceMode.FlatStylized);
+                yield return null;
+
+                var body = bodyObject.AddComponent<Rigidbody2D>();
+                body.gravityScale = 0f;
+                var first = bodyObject.AddComponent<BoxCollider2D>();
+                var second = bodyObject.AddComponent<BoxCollider2D>();
+                second.offset = Vector2.right;
+                body.position = new Vector2(10f, 1f);
+
+                var surface = controller.SurfaceCrossingTrigger.GetComponent<WaterSurfaceInteraction2D>();
+                InvokeTrigger(surface, "OnTriggerEnter2D", first);
+                InvokeTrigger(surface, "OnTriggerEnter2D", second);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.down;
+                body.position = new Vector2(10f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.TrackedSurfaceBodyCount);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+
+                body.linearVelocity = Vector2.right * 0.1f;
+                body.position = new Vector2(10.005f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+
+                body.linearVelocity = Vector2.right * 40f;
+                body.position = new Vector2(10.8f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+                Assert.AreEqual(1f, GetFloat(controller.TopSurface.GetComponent<MeshRenderer>(), "_WaterWakeCount"), 0.0001f);
+                Assert.AreEqual(1f, GetFloat(controller.FrontSurface.GetComponent<MeshRenderer>(), "_WaterWakeCount"), 0.0001f);
+
+                body.linearVelocity = Vector2.left * 40f;
+                body.position = new Vector2(10f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+                Assert.IsTrue(controller.TryGetSurfaceLocalXZ(controller.GetInteractionWorldPosition(new Vector2(10.8f, 0f)), out _));
+
+                body.position = new Vector2(9.2f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(2, controller.ActiveWakeSegmentCount);
+            }
+            finally
+            {
+                Object.Destroy(root);
+                Object.Destroy(bodyObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator SeparateQualifiedBodiesKeepIndependentWakeStreams()
+        {
+            var root = new GameObject("Water Separate Wake Bodies Test");
+            var firstObject = new GameObject("Water First Wake Body");
+            var secondObject = new GameObject("Water Second Wake Body");
+            try
+            {
+                var controller = root.AddComponent<Water25DController>();
+                controller.SetSurfaceMode(WaterSurfaceMode.FlatStylized);
+                yield return null;
+
+                var firstBody = firstObject.AddComponent<Rigidbody2D>();
+                var secondBody = secondObject.AddComponent<Rigidbody2D>();
+                firstBody.gravityScale = 0f;
+                secondBody.gravityScale = 0f;
+                var firstCollider = firstObject.AddComponent<BoxCollider2D>();
+                var secondCollider = secondObject.AddComponent<BoxCollider2D>();
+                firstBody.position = new Vector2(4f, 1f);
+                secondBody.position = new Vector2(14f, 1f);
+
+                var surface = controller.SurfaceCrossingTrigger.GetComponent<WaterSurfaceInteraction2D>();
+                InvokeTrigger(surface, "OnTriggerEnter2D", firstCollider);
+                InvokeTrigger(surface, "OnTriggerEnter2D", secondCollider);
+                InvokeFixedUpdate(surface);
+
+                firstBody.linearVelocity = Vector2.down;
+                secondBody.linearVelocity = Vector2.down;
+                firstBody.position = new Vector2(4f, 0f);
+                secondBody.position = new Vector2(14f, 0f);
+                InvokeFixedUpdate(surface);
+
+                firstBody.linearVelocity = Vector2.right * 40f;
+                secondBody.linearVelocity = Vector2.right * 40f;
+                firstBody.position = new Vector2(4.8f, 0f);
+                secondBody.position = new Vector2(14.8f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(2, controller.ActiveWakeSegmentCount);
+
+                firstBody.position = new Vector2(5.6f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(3, controller.ActiveWakeSegmentCount);
+            }
+            finally
+            {
+                Object.Destroy(root);
+                Object.Destroy(firstObject);
+                Object.Destroy(secondObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator WakeStopsAfterFullSubmersionAndFinalSurfaceContactExit()
+        {
+            var root = new GameObject("Water Wake Lifecycle Test");
+            var bodyObject = new GameObject("Water Wake Lifecycle Body");
+            try
+            {
+                var controller = root.AddComponent<Water25DController>();
+                controller.SetSurfaceMode(WaterSurfaceMode.FlatStylized);
+                yield return null;
+
+                var body = bodyObject.AddComponent<Rigidbody2D>();
+                body.gravityScale = 0f;
+                var collider = bodyObject.AddComponent<BoxCollider2D>();
+                body.position = new Vector2(10f, 1f);
+                var surface = controller.SurfaceCrossingTrigger.GetComponent<WaterSurfaceInteraction2D>();
+                InvokeTrigger(surface, "OnTriggerEnter2D", collider);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.down;
+                body.position = new Vector2(10f, 0f);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.right * 40f;
+                body.position = new Vector2(10.8f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+
+                body.linearVelocity = Vector2.down * 40f;
+                body.position = new Vector2(10.8f, -2f);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.right * 40f;
+                body.position = new Vector2(12f, -2f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+
+                InvokeTrigger(surface, "OnTriggerExit2D", collider);
+                InvokeFixedUpdate(surface);
+                body.position = new Vector2(13.5f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+
+                yield return new WaitForSeconds(1.5f);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+            }
+            finally
+            {
+                Object.Destroy(root);
+                Object.Destroy(bodyObject);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator WakeStateClearsOnResizeDisableAndDestroyedBody()
+        {
+            var root = new GameObject("Water Wake Cleanup Test");
+            var bodyObject = new GameObject("Water Destroyed Wake Body");
+            try
+            {
+                var controller = root.AddComponent<Water25DController>();
+                controller.SetSurfaceMode(WaterSurfaceMode.FlatStylized);
+                yield return null;
+
+                controller.UpdateSurfaceWake(21, new Vector2(10f, controller.WaterlineWorldY), 1f, 0.02f);
+                controller.UpdateSurfaceWake(21, new Vector2(10.8f, controller.WaterlineWorldY), 1f, 0.02f);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+
+                controller.SetDimensions(new Vector2(18f, controller.TopSurfaceSize.y), controller.FrontSurfaceDepth);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+
+                controller.UpdateSurfaceWake(21, new Vector2(10f, controller.WaterlineWorldY), 1f, 0.02f);
+                controller.UpdateSurfaceWake(21, new Vector2(10.8f, controller.WaterlineWorldY), 1f, 0.02f);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+                controller.enabled = false;
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+                controller.enabled = true;
+                yield return null;
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
+
+                var body = bodyObject.AddComponent<Rigidbody2D>();
+                body.gravityScale = 0f;
+                var collider = bodyObject.AddComponent<BoxCollider2D>();
+                body.position = new Vector2(10f, 1f);
+                var surface = controller.SurfaceCrossingTrigger.GetComponent<WaterSurfaceInteraction2D>();
+                InvokeTrigger(surface, "OnTriggerEnter2D", collider);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.down;
+                body.position = new Vector2(10f, 0f);
+                InvokeFixedUpdate(surface);
+                body.linearVelocity = Vector2.right * 40f;
+                body.position = new Vector2(10.8f, 0f);
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(1, controller.ActiveWakeSegmentCount);
+
+                Object.Destroy(bodyObject);
+                yield return null;
+                InvokeFixedUpdate(surface);
+                Assert.AreEqual(0, controller.TrackedSurfaceBodyCount);
+
+                yield return new WaitForSeconds(1.5f);
+                Assert.AreEqual(0, controller.ActiveWakeSegmentCount);
             }
             finally
             {
@@ -430,6 +647,12 @@ namespace Water25D.Tests
                 Assert.AreEqual(0.9f, GetFloat(topRenderer, "_ReflectionStrength"), 0.0001f);
                 Assert.That(GetMatrix(topRenderer, "_ReflectionViewProjection"), Is.EqualTo(reflectionMatrix));
 
+                controller.UpdateSurfaceWake(42, new Vector2(10f, controller.WaterlineWorldY), 1f, 0.02f);
+                controller.UpdateSurfaceWake(42, new Vector2(10.8f, controller.WaterlineWorldY), 1f, 0.02f);
+                Assert.AreEqual(1f, GetFloat(topRenderer, "_WaterWakeCount"), 0.0001f);
+                Assert.AreEqual(1f, GetFloat(frontRenderer, "_WaterWakeCount"), 0.0001f);
+                Assert.AreEqual(GetVectorArray(topRenderer, "_WaterWakesA")[0], GetVectorArray(frontRenderer, "_WaterWakesA")[0]);
+
                 var topRingData = GetVectorArray(topRenderer, "_WaterRingsA");
                 var frontRingData = GetVectorArray(frontRenderer, "_WaterRingsA");
                 Assert.LessOrEqual(topRingData.Length, 16);
@@ -444,6 +667,7 @@ namespace Water25D.Tests
                 yield return null;
                 Assert.AreEqual(0, controller.ActiveSurfaceRingCount);
                 Assert.AreEqual(0f, GetFloat(topRenderer, "_WaterFoamCount"), 0.0001f);
+                Assert.AreEqual(0f, GetFloat(topRenderer, "_WaterWakeCount"), 0.0001f);
                 Assert.AreEqual(0f, GetFloat(frontRenderer, "_WaterFoamCount"), 0.0001f);
                 Assert.IsNotNull(controller.RippleTexture);
                 Assert.IsTrue(controller.CreateSurfaceImpactAt(center, 0.5f, true));
