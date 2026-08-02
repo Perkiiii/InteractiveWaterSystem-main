@@ -11,25 +11,34 @@ namespace Water25D.Rendering
     {
         private readonly Vector4[] _ringsA;
         private readonly Vector4[] _ringsB;
+        private readonly Vector4[] _ringsC;
         private readonly Vector4[] _foamsA;
         private readonly Vector4[] _foamsB;
+        private readonly Vector4[] _foamsC;
         private readonly Vector4[] _wakesA;
         private readonly Vector4[] _wakesB;
+        private readonly Vector4[] _wakesC;
 
         internal WaterSurfaceRenderData(
             Vector4[] ringsA,
             Vector4[] ringsB,
+            Vector4[] ringsC,
             Vector4[] foamsA,
             Vector4[] foamsB,
+            Vector4[] foamsC,
             Vector4[] wakesA,
-            Vector4[] wakesB)
+            Vector4[] wakesB,
+            Vector4[] wakesC)
         {
             _ringsA = ringsA;
             _ringsB = ringsB;
+            _ringsC = ringsC;
             _foamsA = foamsA;
             _foamsB = foamsB;
+            _foamsC = foamsC;
             _wakesA = wakesA;
             _wakesB = wakesB;
+            _wakesC = wakesC;
         }
 
         public int ActiveRingCount { get; internal set; }
@@ -51,6 +60,11 @@ namespace Water25D.Rendering
             return _ringsB[index];
         }
 
+        public Vector4 GetRingC(int index)
+        {
+            return _ringsC[index];
+        }
+
         public Vector4 GetFoamA(int index)
         {
             return _foamsA[index];
@@ -59,6 +73,11 @@ namespace Water25D.Rendering
         public Vector4 GetFoamB(int index)
         {
             return _foamsB[index];
+        }
+
+        public Vector4 GetFoamC(int index)
+        {
+            return _foamsC[index];
         }
 
         public Vector4 GetWakeA(int index)
@@ -71,11 +90,19 @@ namespace Water25D.Rendering
             return _wakesB[index];
         }
 
+        public Vector4 GetWakeC(int index)
+        {
+            return _wakesC[index];
+        }
+
         internal Vector4[] RingsA => _ringsA;
         internal Vector4[] RingsB => _ringsB;
+        internal Vector4[] RingsC => _ringsC;
         internal Vector4[] FoamsA => _foamsA;
         internal Vector4[] FoamsB => _foamsB;
+        internal Vector4[] FoamsC => _foamsC;
         internal Vector4[] WakesA => _wakesA;
         internal Vector4[] WakesB => _wakesB;
+        internal Vector4[] WakesC => _wakesC;
     }
 }

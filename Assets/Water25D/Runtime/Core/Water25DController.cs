@@ -114,6 +114,7 @@ namespace Water25D
         [NonSerialized] private bool _hasPresentationLayout;
         [NonSerialized] private Vector2 _presentationTopSurfaceSize;
         [NonSerialized] private WaterSurfaceMode _presentationSurfaceMode;
+        [NonSerialized] private int _lastAppliedReflectionStateVersion = -1;
 
         public event Action<WaterInteractionEvent> SurfaceEntered;
         public event Action<WaterInteractionEvent> SurfaceExited;
@@ -194,6 +195,23 @@ namespace Water25D
             {
                 UploadSurfacePresentation();
             }
+        }
+
+        private void LateUpdate()
+        {
+            if (!Application.isPlaying || _reflection == null || _rendering == null)
+            {
+                return;
+            }
+
+            var stateVersion = _reflection.StateVersion;
+            if (stateVersion == _lastAppliedReflectionStateVersion)
+            {
+                return;
+            }
+
+            _rendering.ApplyReflectionState(_reflection.LatestState);
+            _lastAppliedReflectionStateVersion = stateVersion;
         }
 
         private void OnDisable()
@@ -658,8 +676,7 @@ namespace Water25D
                     _topSortingOrder,
                     _frontSortingLayerName,
                     _frontSortingOrder,
-                    _reflectionMode,
-                    _reflectionStrength,
+                    _reflection.LatestState,
                     _surfacePresentation.RenderData,
                     out var topMaterial,
                     out var frontMaterial);
@@ -668,6 +685,7 @@ namespace Water25D
                     Debug.LogWarning("Water25D is missing a top or front surface material. Assign package defaults or reimport the package shaders.", this);
                     _hasLoggedMissingSurfaceShader = true;
                 }
+                _lastAppliedReflectionStateVersion = _reflection.StateVersion;
                 _reflectionConfigurationPending = true;
             }
             finally
@@ -687,6 +705,8 @@ namespace Water25D
                 _reflectionResolutionScale,
                 _reflectionUpdateIntervalFrames,
                 _reflectionStrength);
+            _rendering.ApplyReflectionState(_reflection.LatestState);
+            _lastAppliedReflectionStateVersion = _reflection.StateVersion;
         }
 
         private void ConfigureEffects()

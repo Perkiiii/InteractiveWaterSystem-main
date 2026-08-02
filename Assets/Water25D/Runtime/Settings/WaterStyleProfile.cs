@@ -3,6 +3,78 @@ using UnityEngine;
 
 namespace Water25D
 {
+    /// <summary>
+    /// Fixed-grid, package-owned configuration for one optional interaction-mask atlas.
+    /// Gameplay remains authoritative for the interaction bounds; this data only controls
+    /// painterly breakup and deterministic presentation variation.
+    /// </summary>
+    [Serializable]
+    public struct WaterPainterlyMaskSettings : IEquatable<WaterPainterlyMaskSettings>
+    {
+        public Texture2D Atlas;
+        public Vector2Int Grid;
+        public int VariantCount;
+        public int FrameCount;
+        public float Influence;
+        public float RotationVariation;
+
+        public static WaterPainterlyMaskSettings Default => new WaterPainterlyMaskSettings
+        {
+            Atlas = null,
+            Grid = Vector2Int.one,
+            VariantCount = 1,
+            FrameCount = 1,
+            Influence = 1f,
+            RotationVariation = 1f
+        };
+
+        public void Sanitize()
+        {
+            var defaults = Default;
+            Grid.x = Mathf.Clamp(Grid.x, 1, 16);
+            Grid.y = Mathf.Clamp(Grid.y, 1, 16);
+            var cellCount = Mathf.Max(1, Grid.x * Grid.y);
+            VariantCount = Mathf.Clamp(VariantCount > 0 ? VariantCount : defaults.VariantCount, 1, cellCount);
+            var maximumFrames = Mathf.Max(1, cellCount / VariantCount);
+            FrameCount = Mathf.Clamp(FrameCount > 0 ? FrameCount : defaults.FrameCount, 1, maximumFrames);
+            Influence = IsFinite(Influence) ? Mathf.Clamp01(Influence) : defaults.Influence;
+            RotationVariation = IsFinite(RotationVariation) ? Mathf.Clamp01(RotationVariation) : defaults.RotationVariation;
+        }
+
+        public bool Equals(WaterPainterlyMaskSettings other)
+        {
+            return Atlas == other.Atlas &&
+                   Grid == other.Grid &&
+                   VariantCount == other.VariantCount &&
+                   FrameCount == other.FrameCount &&
+                   Mathf.Approximately(Influence, other.Influence) &&
+                   Mathf.Approximately(RotationVariation, other.RotationVariation);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is WaterPainterlyMaskSettings other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = Atlas != null ? Atlas.GetHashCode() : 0;
+                hash = hash * 31 + Grid.GetHashCode();
+                hash = hash * 31 + VariantCount;
+                hash = hash * 31 + FrameCount;
+                hash = hash * 31 + Influence.GetHashCode();
+                return hash * 31 + RotationVariation.GetHashCode();
+            }
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+    }
+
     [Serializable]
     public struct WaterStyleSettings : IEquatable<WaterStyleSettings>
     {
@@ -36,6 +108,9 @@ namespace Water25D
         public float WakeFadePower;
         public float WakeIntensity;
         public float WakeDirectionReversalAngle;
+        public WaterPainterlyMaskSettings RingMask;
+        public WaterPainterlyMaskSettings ContactFoamMask;
+        public WaterPainterlyMaskSettings WakeMask;
 
         public static WaterStyleSettings Default => new WaterStyleSettings
         {
@@ -68,7 +143,10 @@ namespace Water25D
             WakeLifetime = 1.35f,
             WakeFadePower = 1.25f,
             WakeIntensity = 0.45f,
-            WakeDirectionReversalAngle = 120f
+            WakeDirectionReversalAngle = 120f,
+            RingMask = WaterPainterlyMaskSettings.Default,
+            ContactFoamMask = WaterPainterlyMaskSettings.Default,
+            WakeMask = WaterPainterlyMaskSettings.Default
         };
 
         public void Sanitize()
@@ -100,6 +178,9 @@ namespace Water25D
             WakeDirectionReversalAngle = IsFinite(WakeDirectionReversalAngle)
                 ? Mathf.Clamp(WakeDirectionReversalAngle, 90f, 179f)
                 : Default.WakeDirectionReversalAngle;
+            RingMask.Sanitize();
+            ContactFoamMask.Sanitize();
+            WakeMask.Sanitize();
             if (AmbientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 AmbientWaveDirection = Vector2.right;
@@ -137,6 +218,22 @@ namespace Water25D
             block.SetFloat(WaterShaderIds.WakeFadePower, WakeFadePower);
         }
 
+        public void ApplyPainterlyMaskSettings(MaterialPropertyBlock block, WaterQualitySettings qualitySettings)
+        {
+            if (block == null)
+            {
+                return;
+            }
+
+            qualitySettings.Sanitize();
+            var enabled = qualitySettings.EnablePainterlyInteractionMasks;
+            block.SetFloat(WaterShaderIds.PainterlyMasksEnabled, enabled ? 1f : 0f);
+            block.SetFloat(WaterShaderIds.PainterlyAgeFrames, qualitySettings.EnablePainterlyAgeFrames ? 1f : 0f);
+            ApplyPainterlyMask(block, RingMask, WaterShaderIds.RingMaskAtlas, WaterShaderIds.RingMaskAtlasValid, WaterShaderIds.RingMaskAtlasGrid, WaterShaderIds.RingMaskVariantCount, WaterShaderIds.RingMaskFrameCount, WaterShaderIds.RingMaskInfluence, enabled);
+            ApplyPainterlyMask(block, ContactFoamMask, WaterShaderIds.FoamMaskAtlas, WaterShaderIds.FoamMaskAtlasValid, WaterShaderIds.FoamMaskAtlasGrid, WaterShaderIds.FoamMaskVariantCount, WaterShaderIds.FoamMaskFrameCount, WaterShaderIds.FoamMaskInfluence, enabled);
+            ApplyPainterlyMask(block, WakeMask, WaterShaderIds.WakeMaskAtlas, WaterShaderIds.WakeMaskAtlasValid, WaterShaderIds.WakeMaskAtlasGrid, WaterShaderIds.WakeMaskVariantCount, WaterShaderIds.WakeMaskFrameCount, WaterShaderIds.WakeMaskInfluence, enabled);
+        }
+
         public bool Equals(WaterStyleSettings other)
         {
             return TopColor == other.TopColor &&
@@ -168,7 +265,10 @@ namespace Water25D
                    Mathf.Approximately(WakeLifetime, other.WakeLifetime) &&
                    Mathf.Approximately(WakeFadePower, other.WakeFadePower) &&
                    Mathf.Approximately(WakeIntensity, other.WakeIntensity) &&
-                   Mathf.Approximately(WakeDirectionReversalAngle, other.WakeDirectionReversalAngle);
+                   Mathf.Approximately(WakeDirectionReversalAngle, other.WakeDirectionReversalAngle) &&
+                   RingMask.Equals(other.RingMask) &&
+                   ContactFoamMask.Equals(other.ContactFoamMask) &&
+                   WakeMask.Equals(other.WakeMask);
         }
 
         public override bool Equals(object obj)
@@ -209,8 +309,35 @@ namespace Water25D
                 hash = hash * 31 + WakeLifetime.GetHashCode();
                 hash = hash * 31 + WakeFadePower.GetHashCode();
                 hash = hash * 31 + WakeIntensity.GetHashCode();
-                return hash * 31 + WakeDirectionReversalAngle.GetHashCode();
+                hash = hash * 31 + WakeDirectionReversalAngle.GetHashCode();
+                hash = hash * 31 + RingMask.GetHashCode();
+                hash = hash * 31 + ContactFoamMask.GetHashCode();
+                return hash * 31 + WakeMask.GetHashCode();
             }
+        }
+
+        private static void ApplyPainterlyMask(
+            MaterialPropertyBlock block,
+            WaterPainterlyMaskSettings settings,
+            int atlasId,
+            int validId,
+            int gridId,
+            int variantId,
+            int frameId,
+            int influenceId,
+            bool enabled)
+        {
+            settings.Sanitize();
+            block.SetFloat(validId, enabled && settings.Atlas != null && settings.Influence > 0f ? 1f : 0f);
+            if (settings.Atlas != null)
+            {
+                block.SetTexture(atlasId, settings.Atlas);
+            }
+
+            block.SetVector(gridId, new Vector4(settings.Grid.x, settings.Grid.y, 0f, 0f));
+            block.SetFloat(variantId, settings.VariantCount);
+            block.SetFloat(frameId, settings.FrameCount);
+            block.SetFloat(influenceId, settings.Influence);
         }
 
         private static float SanitizePositive(float value, float fallback, float minimum, float maximum)
@@ -284,6 +411,32 @@ namespace Water25D
         [Range(0f, 1f)] [SerializeField] private float _wakeIntensity = 0.45f;
         [Range(90f, 179f)] [SerializeField] private float _wakeDirectionReversalAngle = 120f;
 
+        [Header("Painterly Interaction Masks")]
+        [SerializeField] private WaterPainterlyMaskSettings _ringMask = new WaterPainterlyMaskSettings
+        {
+            Grid = new Vector2Int(1, 1),
+            VariantCount = 1,
+            FrameCount = 1,
+            Influence = 1f,
+            RotationVariation = 1f
+        };
+        [SerializeField] private WaterPainterlyMaskSettings _contactFoamMask = new WaterPainterlyMaskSettings
+        {
+            Grid = new Vector2Int(1, 1),
+            VariantCount = 1,
+            FrameCount = 1,
+            Influence = 1f,
+            RotationVariation = 1f
+        };
+        [SerializeField] private WaterPainterlyMaskSettings _wakeMask = new WaterPainterlyMaskSettings
+        {
+            Grid = new Vector2Int(1, 1),
+            VariantCount = 1,
+            FrameCount = 1,
+            Influence = 1f,
+            RotationVariation = 1f
+        };
+
         [Header("Optional Material Templates")]
         [Tooltip("Optional project or package-owned template. It is never mutated at runtime.")]
         [SerializeField] private Material _topMaterialTemplate;
@@ -326,7 +479,10 @@ namespace Water25D
                 WakeLifetime = _wakeLifetime,
                 WakeFadePower = _wakeFadePower,
                 WakeIntensity = _wakeIntensity,
-                WakeDirectionReversalAngle = _wakeDirectionReversalAngle
+                WakeDirectionReversalAngle = _wakeDirectionReversalAngle,
+                RingMask = _ringMask,
+                ContactFoamMask = _contactFoamMask,
+                WakeMask = _wakeMask
             };
             settings.Sanitize();
             return settings;
@@ -360,6 +516,9 @@ namespace Water25D
             _wakeFadePower = settings.WakeFadePower;
             _wakeIntensity = settings.WakeIntensity;
             _wakeDirectionReversalAngle = settings.WakeDirectionReversalAngle;
+            _ringMask = settings.RingMask;
+            _contactFoamMask = settings.ContactFoamMask;
+            _wakeMask = settings.WakeMask;
             if (_ambientWaveDirection.sqrMagnitude < 0.0001f)
             {
                 _ambientWaveDirection = Vector2.right;

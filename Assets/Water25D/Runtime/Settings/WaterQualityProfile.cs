@@ -25,6 +25,8 @@ namespace Water25D
         public int MaximumTrackedSurfaceBodies;
         public int MaximumWakeSegments;
         public int MaximumWakeEmissionsPerStep;
+        public bool EnablePainterlyInteractionMasks;
+        public bool EnablePainterlyAgeFrames;
 
         public static WaterQualitySettings Default => new WaterQualitySettings
         {
@@ -46,7 +48,9 @@ namespace Water25D
             MaximumContactFoams = 4,
             MaximumTrackedSurfaceBodies = 8,
             MaximumWakeSegments = 8,
-            MaximumWakeEmissionsPerStep = 2
+            MaximumWakeEmissionsPerStep = 2,
+            EnablePainterlyInteractionMasks = true,
+            EnablePainterlyAgeFrames = true
         };
 
         public void Sanitize()
@@ -108,7 +112,9 @@ namespace Water25D
                    MaximumContactFoams == other.MaximumContactFoams &&
                    MaximumTrackedSurfaceBodies == other.MaximumTrackedSurfaceBodies &&
                    MaximumWakeSegments == other.MaximumWakeSegments &&
-                   MaximumWakeEmissionsPerStep == other.MaximumWakeEmissionsPerStep;
+                   MaximumWakeEmissionsPerStep == other.MaximumWakeEmissionsPerStep &&
+                   EnablePainterlyInteractionMasks == other.EnablePainterlyInteractionMasks &&
+                   EnablePainterlyAgeFrames == other.EnablePainterlyAgeFrames;
         }
 
         public override bool Equals(object obj)
@@ -138,7 +144,9 @@ namespace Water25D
                 hash = hash * 31 + MaximumContactFoams;
                 hash = hash * 31 + MaximumTrackedSurfaceBodies;
                 hash = hash * 31 + MaximumWakeSegments;
-                return hash * 31 + MaximumWakeEmissionsPerStep;
+                hash = hash * 31 + MaximumWakeEmissionsPerStep;
+                hash = hash * 31 + EnablePainterlyInteractionMasks.GetHashCode();
+                return hash * 31 + EnablePainterlyAgeFrames.GetHashCode();
             }
         }
     }
@@ -173,6 +181,10 @@ namespace Water25D
         [Range(1, 16)] [SerializeField] private int _maximumTrackedSurfaceBodies = 8;
         [Range(1, 16)] [SerializeField] private int _maximumWakeSegments = 8;
         [Range(1, 16)] [SerializeField] private int _maximumWakeEmissionsPerStep = 2;
+
+        [Header("Painterly Interaction")]
+        [SerializeField] private bool _enablePainterlyInteractionMasks = true;
+        [SerializeField] private bool _enablePainterlyAgeFrames = true;
 
         [Header("Geometry")]
         [Min(0.5f)] [SerializeField] private float _topVerticesPerUnit = 8f;
@@ -209,7 +221,9 @@ namespace Water25D
                     : WaterQualitySettings.Default.MaximumWakeSegments,
                 MaximumWakeEmissionsPerStep = _maximumWakeEmissionsPerStep > 0
                     ? _maximumWakeEmissionsPerStep
-                    : WaterQualitySettings.Default.MaximumWakeEmissionsPerStep
+                    : WaterQualitySettings.Default.MaximumWakeEmissionsPerStep,
+                EnablePainterlyInteractionMasks = _enablePainterlyInteractionMasks,
+                EnablePainterlyAgeFrames = _enablePainterlyAgeFrames
             };
             settings.Sanitize();
             return settings;
@@ -237,6 +251,8 @@ namespace Water25D
             _maximumTrackedSurfaceBodies = settings.MaximumTrackedSurfaceBodies;
             _maximumWakeSegments = settings.MaximumWakeSegments;
             _maximumWakeEmissionsPerStep = settings.MaximumWakeEmissionsPerStep;
+            _enablePainterlyInteractionMasks = settings.EnablePainterlyInteractionMasks;
+            _enablePainterlyAgeFrames = settings.EnablePainterlyAgeFrames;
         }
     }
 }

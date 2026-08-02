@@ -89,6 +89,16 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawPainterlyFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Painterly Interaction Masks", delegate
+            {
+                DrawPainterlyMask(serializedObject, "_ringMask", "Surface Rings", "Optional grayscale ring atlas. Missing or disabled artwork keeps the analytical ring.");
+                DrawPainterlyMask(serializedObject, "_contactFoamMask", "Contact Foam", "Optional grayscale contact-foam atlas. Gameplay bounds and body ownership remain analytical.");
+                DrawPainterlyMask(serializedObject, "_wakeMask", "Wake Segments", "Optional grayscale wake atlas. The analytical capsule keeps movement direction authoritative.");
+            });
+        }
+
         public static bool DrawMaterialFields(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water Style Material Templates", delegate
@@ -189,6 +199,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Procedural Surface Rings", false, DrawRingFields);
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
             DrawStandaloneSection(serializedObject, "Distance-Spaced Wakes", false, DrawWakeFields);
+            DrawStandaloneSection(serializedObject, "Painterly Interaction Masks", false, DrawPainterlyFields);
             DrawStandaloneSection(serializedObject, "Material Templates", false, DrawMaterialFields);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);
@@ -252,6 +263,18 @@ namespace Water25D.Editor
             {
                 EditorGUILayout.PropertyField(property, new GUIContent(label, tooltip), true);
             }
+        }
+
+        private static void DrawPainterlyMask(SerializedObject serializedObject, string propertyPath, string label, string guidance)
+        {
+            EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(guidance, MessageType.Info);
+            Property(serializedObject, propertyPath + ".Atlas", "Atlas", "Fixed-grid grayscale mask atlas. Use clamp wrapping and no mipmaps to keep cells isolated.");
+            Property(serializedObject, propertyPath + ".Grid", "Columns / Rows", "Fixed atlas grid. Cells are row-major with variants inside each age frame.");
+            Property(serializedObject, propertyPath + ".VariantCount", "Variant Count", "Stable variant count. Values are clamped to the available grid cells.");
+            Property(serializedObject, propertyPath + ".FrameCount", "Frame Count", "Optional age frames. One-frame atlases are valid and use the first frame.");
+            Property(serializedObject, propertyPath + ".Influence", "Mask Influence", "Blends painterly grayscale into the analytical interaction; zero retains the analytical result.");
+            Property(serializedObject, propertyPath + ".RotationVariation", "Rotation Variation", "Stable creation-time rotation range. Wake variation remains deliberately narrow.");
         }
 
         private static void CopyFloat(SerializedObject destination, SerializedObject source, string propertyPath)

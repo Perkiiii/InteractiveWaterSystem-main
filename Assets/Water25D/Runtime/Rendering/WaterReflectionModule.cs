@@ -9,6 +9,15 @@ namespace Water25D.Rendering
     internal sealed class WaterReflectionModule : System.IDisposable
     {
         private WaterReflectionManager.ReflectionRegistration _registration;
+        private WaterReflectionRenderState _fallbackState = WaterReflectionRenderState.ForMode(
+            WaterReflectionMode.Stylized,
+            0.35f);
+
+        public WaterReflectionRenderState LatestState =>
+            _registration != null ? _registration.State : _fallbackState;
+
+        public int StateVersion =>
+            _registration != null ? _registration.StateVersion : 0;
 
         public void Configure(
             MeshRenderer topRenderer,
@@ -21,6 +30,7 @@ namespace Water25D.Rendering
             float reflectionStrength)
         {
             DisposeRegistration();
+            _fallbackState = WaterReflectionRenderState.ForMode(reflectionMode, reflectionStrength);
             if (!Application.isPlaying || reflectionMode == WaterReflectionMode.Disabled || topRenderer == null || reflectionAnchor == null)
             {
                 return;
@@ -40,6 +50,7 @@ namespace Water25D.Rendering
         public void Dispose()
         {
             DisposeRegistration();
+            _fallbackState = WaterReflectionRenderState.Disabled;
         }
 
         private void DisposeRegistration()

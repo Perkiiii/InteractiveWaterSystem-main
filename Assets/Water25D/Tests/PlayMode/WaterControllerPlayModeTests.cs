@@ -621,13 +621,6 @@ namespace Water25D.Tests
 
                 var topRenderer = controller.TopSurface.GetComponent<MeshRenderer>();
                 var frontRenderer = controller.FrontSurface.GetComponent<MeshRenderer>();
-                var topBlock = new MaterialPropertyBlock();
-                topRenderer.GetPropertyBlock(topBlock);
-                var reflectionMatrix = Matrix4x4.TRS(new Vector3(2f, 3f, 4f), Quaternion.Euler(5f, 10f, 15f), Vector3.one);
-                topBlock.SetFloat(Shader.PropertyToID("_ReflectionEnabled"), 1f);
-                topBlock.SetFloat(Shader.PropertyToID("_ReflectionStrength"), 0.9f);
-                topBlock.SetMatrix(Shader.PropertyToID("_ReflectionViewProjection"), reflectionMatrix);
-                topRenderer.SetPropertyBlock(topBlock);
 
                 var center = controller.transform.TransformPoint(new Vector3(10f, controller.WaterlineLocalY, 3.25f));
                 Assert.IsTrue(controller.CreateSurfaceImpactAt(center, 0.75f, true));
@@ -636,16 +629,18 @@ namespace Water25D.Tests
                 Assert.AreEqual(1f, GetFloat(topRenderer, "_WaterRingCount"));
                 Assert.AreEqual(1f, GetFloat(frontRenderer, "_WaterRingCount"));
                 Assert.AreEqual(1f, GetFloat(topRenderer, "_SurfaceMode"));
-                Assert.AreEqual(0.9f, GetFloat(topRenderer, "_ReflectionStrength"), 0.0001f);
-                Assert.That(GetMatrix(topRenderer, "_ReflectionViewProjection"), Is.EqualTo(reflectionMatrix));
+                Assert.AreEqual(0f, GetFloat(topRenderer, "_ReflectionEnabled"), 0.0001f);
+                Assert.AreEqual(1f, GetFloat(topRenderer, "_ReflectionFallback"), 0.0001f);
+                Assert.AreEqual(0.35f, GetFloat(topRenderer, "_ReflectionStrength"), 0.0001f);
+                Assert.That(GetMatrix(topRenderer, "_ReflectionViewProjection"), Is.EqualTo(Matrix4x4.identity));
 
                 controller.UpdateSurfaceContactFoam(42, new Vector2(10f, controller.WaterlineWorldY), 1f, 0.5f, 1f);
                 Assert.AreEqual(1f, GetFloat(topRenderer, "_WaterFoamCount"), 0.0001f);
                 Assert.AreEqual(1f, GetFloat(frontRenderer, "_WaterFoamCount"), 0.0001f);
                 Assert.AreEqual(10f, GetVectorArray(topRenderer, "_WaterFoamsA")[0].x, 0.0001f);
                 Assert.AreEqual(GetVectorArray(topRenderer, "_WaterFoamsA")[0], GetVectorArray(frontRenderer, "_WaterFoamsA")[0]);
-                Assert.AreEqual(0.9f, GetFloat(topRenderer, "_ReflectionStrength"), 0.0001f);
-                Assert.That(GetMatrix(topRenderer, "_ReflectionViewProjection"), Is.EqualTo(reflectionMatrix));
+                Assert.AreEqual(0.35f, GetFloat(topRenderer, "_ReflectionStrength"), 0.0001f);
+                Assert.AreEqual(1f, GetFloat(topRenderer, "_ReflectionFallback"), 0.0001f);
 
                 controller.UpdateSurfaceWake(42, new Vector2(10f, controller.WaterlineWorldY), 1f, 0.02f);
                 controller.UpdateSurfaceWake(42, new Vector2(10.8f, controller.WaterlineWorldY), 1f, 0.02f);
@@ -658,6 +653,15 @@ namespace Water25D.Tests
                 Assert.LessOrEqual(topRingData.Length, 16);
                 Assert.LessOrEqual(frontRingData.Length, 16);
                 Assert.AreEqual(topRingData[0], frontRingData[0]);
+                Assert.AreEqual(
+                    GetVectorArray(topRenderer, "_WaterRingsC")[0],
+                    GetVectorArray(frontRenderer, "_WaterRingsC")[0]);
+                Assert.AreEqual(
+                    GetVectorArray(topRenderer, "_WaterFoamsC")[0],
+                    GetVectorArray(frontRenderer, "_WaterFoamsC")[0]);
+                Assert.AreEqual(
+                    GetVectorArray(topRenderer, "_WaterWakesC")[0],
+                    GetVectorArray(frontRenderer, "_WaterWakesC")[0]);
 
                 Assert.IsFalse(controller.CreateSurfaceImpactAt(root.transform.TransformPoint(new Vector3(-0.1f, 0f, 2f)), 0.5f));
                 Assert.AreEqual(1, controller.ActiveSurfaceRingCount);
@@ -666,6 +670,8 @@ namespace Water25D.Tests
                 controller.SetSurfaceMode(WaterSurfaceMode.SimulatedRipples);
                 yield return null;
                 Assert.AreEqual(0, controller.ActiveSurfaceRingCount);
+                Assert.AreEqual(0f, GetFloat(topRenderer, "_WaterRingCount"), 0.0001f);
+                Assert.AreEqual(0f, GetFloat(frontRenderer, "_WaterRingCount"), 0.0001f);
                 Assert.AreEqual(0f, GetFloat(topRenderer, "_WaterFoamCount"), 0.0001f);
                 Assert.AreEqual(0f, GetFloat(topRenderer, "_WaterWakeCount"), 0.0001f);
                 Assert.AreEqual(0f, GetFloat(frontRenderer, "_WaterFoamCount"), 0.0001f);

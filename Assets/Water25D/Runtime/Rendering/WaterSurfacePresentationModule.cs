@@ -30,6 +30,7 @@ namespace Water25D.Rendering
             public float Intensity;
             public float DirectionSign;
             public int CreationSequence;
+            public Vector4 PainterlyMetadata;
         }
 
         private struct ContactFoamSlot
@@ -42,6 +43,7 @@ namespace Water25D.Rendering
             public float Submersion;
             public float FadeAmount;
             public float NoisePhase;
+            public Vector4 PainterlyMetadata;
             public bool HasSlot;
             public bool Active;
             public bool Fading;
@@ -58,6 +60,7 @@ namespace Water25D.Rendering
             public float Lifetime;
             public float Intensity;
             public float NoisePhase;
+            public Vector4 PainterlyMetadata;
             public bool HasSlot;
             public int CreationSequence;
         }
@@ -75,13 +78,16 @@ namespace Water25D.Rendering
         private readonly RingSlot[] _ringSlots = new RingSlot[ShaderMaximumRings];
         private readonly Vector4[] _ringsA = new Vector4[ShaderMaximumRings];
         private readonly Vector4[] _ringsB = new Vector4[ShaderMaximumRings];
+        private readonly Vector4[] _ringsC = new Vector4[ShaderMaximumRings];
         private readonly ContactFoamSlot[] _contactFoamSlots = new ContactFoamSlot[ShaderMaximumContactFoams];
         private readonly Vector4[] _foamsA = new Vector4[ShaderMaximumContactFoams];
         private readonly Vector4[] _foamsB = new Vector4[ShaderMaximumContactFoams];
+        private readonly Vector4[] _foamsC = new Vector4[ShaderMaximumContactFoams];
         private readonly WakeSlot[] _wakeSlots = new WakeSlot[ShaderMaximumWakeSegments];
         private readonly WakeBodyState[] _wakeBodyStates = new WakeBodyState[CompileTimeMaximumWakeBodies];
         private readonly Vector4[] _wakesA = new Vector4[ShaderMaximumWakeSegments];
         private readonly Vector4[] _wakesB = new Vector4[ShaderMaximumWakeSegments];
+        private readonly Vector4[] _wakesC = new Vector4[ShaderMaximumWakeSegments];
         private readonly WaterSurfaceRenderData _renderData;
 
         private int _maximumSurfaceRings = DefaultMaximumSurfaceRings;
@@ -120,10 +126,13 @@ namespace Water25D.Rendering
         private float _wakeFadePower;
         private float _wakeIntensity;
         private float _wakeDirectionReversalCosine;
+        private float _ringMaskRotationVariation;
+        private float _foamMaskRotationVariation;
+        private float _wakeMaskRotationVariation;
 
         public WaterSurfacePresentationModule(int maximumSurfaceRings = DefaultMaximumSurfaceRings)
         {
-            _renderData = new WaterSurfaceRenderData(_ringsA, _ringsB, _foamsA, _foamsB, _wakesA, _wakesB);
+            _renderData = new WaterSurfaceRenderData(_ringsA, _ringsB, _ringsC, _foamsA, _foamsB, _foamsC, _wakesA, _wakesB, _wakesC);
             ApplyConfiguration(
                 maximumSurfaceRings,
                 DefaultMaximumContactFoams,
@@ -204,6 +213,7 @@ namespace Water25D.Rendering
                 _activeRingCount++;
             }
 
+            var creationSequence = ++_nextCreationSequence;
             _ringSlots[slotIndex] = new RingSlot
             {
                 CenterLocalXZ = centerLocalXZ,
@@ -215,7 +225,8 @@ namespace Water25D.Rendering
                 Softness = _ringSoftness,
                 Intensity = Mathf.Clamp01(safeStrength * _ringIntensity),
                 DirectionSign = initialUp ? 1f : -1f,
-                CreationSequence = ++_nextCreationSequence
+                CreationSequence = creationSequence,
+                PainterlyMetadata = CreatePainterlyMetadata(creationSequence, 0x1f123bb5u, _ringMaskRotationVariation, false)
             };
 
             RebuildRenderData();
@@ -260,6 +271,7 @@ namespace Water25D.Rendering
                     Submersion = Mathf.Clamp01(submersion01),
                     FadeAmount = 1f,
                     NoisePhase = noisePhase,
+                    PainterlyMetadata = CreatePainterlyMetadata(bodyKey, 0x6a09e667u, _foamMaskRotationVariation, false),
                     HasSlot = true,
                     Active = true,
                     Fading = false,
@@ -630,6 +642,9 @@ namespace Water25D.Rendering
                 ? Mathf.Clamp(styleSettings.WakeDirectionReversalAngle, 90f, 179f)
                 : WaterStyleSettings.Default.WakeDirectionReversalAngle;
             _wakeDirectionReversalCosine = Mathf.Cos(reversalAngle * Mathf.Deg2Rad);
+            _ringMaskRotationVariation = SanitizeIntensity(styleSettings.RingMask.RotationVariation, WaterPainterlyMaskSettings.Default.RotationVariation);
+            _foamMaskRotationVariation = SanitizeIntensity(styleSettings.ContactFoamMask.RotationVariation, WaterPainterlyMaskSettings.Default.RotationVariation);
+            _wakeMaskRotationVariation = SanitizeIntensity(styleSettings.WakeMask.RotationVariation, WaterPainterlyMaskSettings.Default.RotationVariation);
 
             if (_activeRingCount > _maximumSurfaceRings)
             {
@@ -670,6 +685,7 @@ namespace Water25D.Rendering
             }
 
             var replacingLiveSlot = _wakeSlots[slotIndex].HasSlot;
+            var creationSequence = ++_nextWakeCreationSequence;
             _wakeSlots[slotIndex] = new WakeSlot
             {
                 BodyKey = bodyKey,
@@ -679,9 +695,10 @@ namespace Water25D.Rendering
                 Age = 0f,
                 Lifetime = _wakeLifetime,
                 Intensity = Mathf.Clamp01(intensity),
-                NoisePhase = ComputeWakePhase(bodyKey, _nextWakeCreationSequence + 1),
+                NoisePhase = ComputeWakePhase(bodyKey, creationSequence),
+                PainterlyMetadata = CreatePainterlyMetadata(bodyKey, 0xbb67ae85u, _wakeMaskRotationVariation, true, creationSequence),
                 HasSlot = true,
-                CreationSequence = ++_nextWakeCreationSequence
+                CreationSequence = creationSequence
             };
 
             if (replacingLiveSlot)
@@ -832,6 +849,30 @@ namespace Water25D.Rendering
             return (hash & 0x00ffffffu) / 16777215f;
         }
 
+        private static Vector4 CreatePainterlyMetadata(
+            int stableKey,
+            uint salt,
+            float rotationVariation,
+            bool wake,
+            int creationSequence = 0)
+        {
+            var hash = unchecked((uint)stableKey) ^ salt;
+            hash ^= unchecked((uint)creationSequence) * 0x9e3779b9u;
+            hash ^= hash >> 16;
+            hash *= 0x7feb352du;
+            hash ^= hash >> 15;
+            hash *= 0x846ca68bu;
+            hash ^= hash >> 16;
+
+            var variant = (float)(hash & 0x000000ffu);
+            var rotationUnit = ((hash >> 8) & 0x0000ffffu) / 65535f;
+            var frameOffset = (float)((hash >> 24) & 0x0000003fu);
+            var flip = (hash & 0x80000000u) == 0u ? 1f : -1f;
+            var maximumAngle = wake ? 0.18f : Mathf.PI * 2f;
+            var rotation = (rotationUnit * 2f - 1f) * maximumAngle * Mathf.Clamp01(rotationVariation);
+            return new Vector4(variant, rotation, frameOffset, flip);
+        }
+
         private void ReclaimExpiredSlots()
         {
             var removed = false;
@@ -938,6 +979,7 @@ namespace Water25D.Rendering
             {
                 _ringsA[i] = Vector4.zero;
                 _ringsB[i] = Vector4.zero;
+                _ringsC[i] = Vector4.zero;
             }
 
             for (var i = 0; i < _activeRingCount; i++)
@@ -946,18 +988,21 @@ namespace Water25D.Rendering
                 var age01 = Mathf.Clamp01(slot.Age / Mathf.Max(0.01f, slot.Lifetime));
                 _ringsA[i] = new Vector4(slot.CenterLocalXZ.x, slot.CenterLocalXZ.y, age01, slot.Intensity);
                 _ringsB[i] = new Vector4(slot.StartRadius, slot.EndRadius, slot.Thickness, slot.Softness);
+                _ringsC[i] = slot.PainterlyMetadata;
             }
 
             for (var i = 0; i < ShaderMaximumContactFoams; i++)
             {
                 _foamsA[i] = Vector4.zero;
                 _foamsB[i] = Vector4.zero;
+                _foamsC[i] = Vector4.zero;
             }
 
             for (var i = 0; i < ShaderMaximumWakeSegments; i++)
             {
                 _wakesA[i] = Vector4.zero;
                 _wakesB[i] = Vector4.zero;
+                _wakesC[i] = Vector4.zero;
             }
 
             _activeContactFoamCount = 0;
@@ -990,6 +1035,7 @@ namespace Water25D.Rendering
                     slot.FadeAmount,
                     slot.Submersion,
                     slot.NoisePhase);
+                _foamsC[renderFoamCount] = slot.PainterlyMetadata;
                 renderFoamCount++;
             }
 
@@ -1012,6 +1058,7 @@ namespace Water25D.Rendering
                     Mathf.Clamp01(slot.Age / Mathf.Max(0.01f, slot.Lifetime)),
                     slot.Intensity,
                     slot.NoisePhase);
+                _wakesC[renderWakeCount] = slot.PainterlyMetadata;
                 renderWakeCount++;
             }
 

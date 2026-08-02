@@ -207,6 +207,87 @@ Manual validation still required for this slice:
 - Switch to `SimulatedRipples`, resize, disable/re-enable, and destroy the controller. Confirm analytical wake count uploads zero in simulated mode, CRT routing remains intact, and no stale wake data survives lifecycle transitions.
 - Inspect the Console and shader compiler for this slice, and use the Frame Debugger/Profiler only to verify no extra wake draw or obvious allocation/resource churn if the required Unity environment is available. No performance claim is made here.
 
+## Flat-stylized Phase 1 baseline and Phase 2 rendering ownership slice
+
+The verified Phase 1 baseline supplied with the task is recorded separately from this
+Phase 2 work:
+
+- Unity `6000.5.4f1`.
+- EditMode job `11a29ab7929d4403989ba09c61982fc6`: 68 total, 68 passed, 0 failed, 0 skipped.
+- PlayMode job `ed56644b5b4b424aa251f2df681e1390`: 13 total, 13 passed, 0 failed, 0 skipped.
+- C# compilation and shader compilation passed; no missing references or Water25D warnings were observed.
+
+The repository was on `main` at `6e713fc397f56f2a30e06172e61c2e05441c2b85`, one legitimate commit beyond the requested `60d2303be07db22172de7a6bf32fe6df5f3b70ec` baseline. The initial working tree was clean.
+
+Phase 2 now provides one final rendering ownership path:
+
+- `WaterReflectionManager` owns reflection groups, cameras, render textures, timing, cleanup, and publication of immutable `WaterReflectionRenderState` snapshots. `ReflectionRegistration` versions a snapshot only when its texture, matrix, enabled/fallback state, strength, or render frame changes.
+- `WaterReflectionModule` owns registration and exposes `LatestState`/`StateVersion`; `Water25DController` applies a changed snapshot through `WaterRenderingModule` in `LateUpdate`.
+- `WaterRenderingModule` owns cached top/front renderer inputs and two reusable `MaterialPropertyBlock` instances. It is the only package runtime/editor writer of `SetPropertyBlock`; every authoring, presentation, ripple, and reflection update performs a complete write. Runtime/editor code does not call `GetPropertyBlock`.
+- Fixed-capacity ring, contact-foam, and wake arrays now have companion C metadata arrays. The rendering module uploads A/B/C data together and uploads zero analytical interaction counts for `SimulatedRipples`.
+- The scheduling path creates no interaction cameras, render textures, materials, meshes, draw calls, managed per-frame arrays, or managed per-frame lists. Reflection state updates are version-gated; surface changes reuse the presentation module's preallocated arrays.
+
+Painterly interaction configuration is optional and analytical-first:
+
+- `WaterPainterlyMaskSettings` is available independently for rings, contact foam, and wakes. Each setting contains an optional grayscale `Texture2D`, a sanitized 1–16 fixed grid, variant count, frame count, influence, and rotation variation.
+- The atlas contract is row-major cells, with variants contiguous within each age-frame group. Frames are clamped to the available cells; a one-cell/one-frame atlas is valid. Sampling uses a 2% cell inset to prevent bilinear leakage.
+- C metadata is `(variant, rotation radians, frame offset, flip sign)`. Ring and foam metadata uses deterministic sequence/body-key hashing with full-turn bounded rotation; wake metadata uses body key plus wake sequence, a maximum ±0.18 rad variation, and direction-aligned capsule UVs. Flip is deterministic ±1. Age frames are deterministic, clamped, and disabled safely when the quality flag is off.
+- Shaders reject cheap analytic bounds first, evaluate the existing ring/foam/wake shape, and only then sample a valid enabled mask. The mask multiplies the analytical result; missing, disabled, invalid, zero-influence, or unsupported atlas configuration falls back to the analytical shape. No interaction mask owns geometry.
+
+Added profile and Inspector controls:
+
+- Style: `RingMask`, `ContactFoamMask`, and `WakeMask` atlas/grid/variant/frame/influence/rotation settings.
+- Quality: `EnablePainterlyInteractionMasks` and `EnablePainterlyAgeFrames`. These affect presentation equality but are excluded from simulation identity.
+- Controller, style-profile, and quality-profile inspectors expose the settings under the existing flat-stylized Rendering/Contact Ripples workflow without changing serialized sample assets.
+
+Exact Phase 2 files changed or created:
+
+- `Assets/Water25D/Runtime/Core/Water25DController.cs`.
+- `Assets/Water25D/Runtime/Core/WaterRenderingModule.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterReflectionManager.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterReflectionModule.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterReflectionRenderState.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Runtime/Rendering/WaterShaderIds.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfacePresentationModule.cs`.
+- `Assets/Water25D/Runtime/Rendering/WaterSurfaceRenderData.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterQualityProfile.cs`.
+- `Assets/Water25D/Runtime/Settings/WaterStyleProfile.cs`.
+- `Assets/Water25D/Editor/Water25DEditor.cs`.
+- `Assets/Water25D/Editor/WaterQualityProfileEditor.cs`.
+- `Assets/Water25D/Editor/WaterStyleProfileEditor.cs`.
+- `Assets/Water25D/Shaders/Water25D_TopSurface.shader`.
+- `Assets/Water25D/Shaders/Water25D_FrontSurface.shader`.
+- `Assets/Water25D/Shaders/Water25D_InteractionMasks.hlsl` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Tests/EditMode/WaterPainterlyInteractionTests.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Tests/EditMode/WaterRenderingOwnershipTests.cs` and its Unity-generated `.meta` file.
+- `Assets/Water25D/Tests/PlayMode/WaterControllerPlayModeTests.cs`.
+- `Assets/Water25D/Documentation/STATUS.md`.
+
+Reference assets and portability:
+
+- Inspected `Assets/ReferenceOnly/README.md`; the referenced Ameye/Minions assets are not present in this checkout. No reference material, graph, subgraph, HLSL, texture, shader, or code was copied, adapted, or recreated from that directory.
+- No attribution or licence document was added for reference assets. Existing `THIRD_PARTY_NOTICES.md` and the reference-only README remain the applicable records.
+- `rg -n "Assets/ReferenceOnly" Assets/Water25D` returned no package dependency. The broader `Cainos|InteractiveWaterSystem|DemoScenes|Lucid` scan returned only existing documentation/audit text, with no runtime or editor dependency.
+
+Phase 2 validation through the connected Unity MCP:
+
+- Complete EditMode job `aca9e9404553478b8abce836c80f21cd1`: 76 total, 76 passed, 0 failed, 0 skipped, result state `Passed`.
+- Complete PlayMode job `824becdf9c3741d2aeeaf3075cba546d`: 13 total, 13 passed, 0 failed, 0 skipped, result state `Passed`.
+- Focused metadata job `47db5115b25f4a8eba4be4f3cee94ad5`: 1 total, 1 passed, 0 failed, 0 skipped.
+- Unity refresh/import completed with the editor idle, ready, and not compiling. The top and front shader assets were read successfully after refresh; no Water25D C# or shader compiler error was observed. The standalone HLSL include is imported through those shaders and was not exposed as an independent shader asset by the MCP shader reader.
+- Console was cleared after testing and returned 0 error/warning entries. Earlier entries were Unity Test Runner result-save/performance-cleanup messages and MCP transport warnings, not Water25D diagnostics.
+- Frame Debugger was enabled and queried through MCP in the idle non-playing editor; it reported 0 events. This is not a PlayMode draw-call comparison. A live visual Frame Debugger capture remains manual work.
+- `git diff --check` passed. `git status --short` contains only the listed Water25D source, shader, editor, test, new-asset `.meta`, and documentation changes; the sample scene and solution ordering changes created by Unity test setup were restored to their exact HEAD content.
+
+No scene was intentionally saved or modified by Phase 2. Unity's PlayMode test harness transiently serialized the open visual-only sample during its temporary setup; that incidental diff was detected and restored before the final audit. No Phase 3 stylized-water/reflection stack, interaction camera, new CRT work, Fresnel, refraction, caustics, light shafts, splash artwork, migration tooling, compute backend, or target-device validation was included.
+
+Remaining manual visual work:
+
+- Open `Assets/Water25D/Samples/Water25D_VisualFlat.unity` without saving, select `Water25D_FlatTest`, and verify flat top/front geometry, analytical ring/foam/wake fallback, waterline seam, mode-specific CRT ownership, and reflection fallback in both Edit Mode and Play Mode.
+- Configure temporary package-owned test atlases in a disposable style-profile copy and verify ring, contact-foam, and wake breakup, stable variant/rotation/flip/frame behavior, age-frame clamping, cell-edge isolation, and missing/disabled fallback. Do not commit those temporary assets unless a later task explicitly adds production art.
+- Use the Frame Debugger and Profiler while the scene is playing to confirm the existing top/front draws carry the interaction data, no interaction camera/RT or extra draw is created, and no steady-state allocations or resource churn are introduced. Check prefab-stage and multi-selection Inspector behavior separately.
+- Verify a moved copy of `Assets/Water25D/` in a clean compatible project; project-level URP, sorting-layer, and setup requirements remain documented rather than silently configured.
+
 ## Package boundaries
 
 The Water25D runtime and editor assemblies have no code dependency on `Assets/InteractiveWaterSystem/`, `Assets/Cainos/`, `Assets/DemoScenes/`, or Lucid Editor. Unity MCP is development tooling and is not referenced by the package code.
@@ -304,10 +385,10 @@ Project-level rendering and sorting configuration is intentionally not modified 
 
 ## Milestone status
 
-The active flat-stylized redesign milestone was advanced by this bounded slice but is not complete. The next bounded task is:
+The Phase 2 rendering-ownership and painterly-interaction code/test slice was implemented and validated, but the full milestone is not complete until the remaining manual visual, live Frame Debugger/Profiler, clean-project, and target-device checks are performed. The next bounded task is:
 
 ```text
-Rendering ownership and painterly interaction framework
+Phase 3 — Stylized water and reflection presentation
 ```
 
 Full prefab-stage, multi-selection, clean-project portability, measured profiling, target-device validation, and the remaining flat presentation features remain follow-up work.

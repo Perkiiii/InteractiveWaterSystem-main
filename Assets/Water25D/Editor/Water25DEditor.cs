@@ -219,6 +219,7 @@ namespace Water25D.Editor
                     DrawSharedProfileNotice(qualityProfile, false);
                     DrawNestedQualitySection(_qualityProfileSerializedObject, "Surface Rings", "Rendering.ContactRipples.SurfaceRings", WaterQualityProfileEditor.DrawSurfaceRingFields);
                     DrawNestedQualitySection(_qualityProfileSerializedObject, "Contact Foam", "Rendering.ContactRipples.ContactFoam", WaterQualityProfileEditor.DrawContactFoamFields);
+                    DrawNestedQualitySection(_qualityProfileSerializedObject, "Painterly Masks", "Rendering.ContactRipples.PainterlyMasks", WaterQualityProfileEditor.DrawPainterlyFields);
                 }
 
                 if (styleProfile != null && _styleProfileSerializedObject != null)
@@ -226,6 +227,8 @@ namespace Water25D.Editor
                     DrawSharedProfileNotice(styleProfile, true);
                     WaterStyleProfileEditor.DrawRingFields(_styleProfileSerializedObject);
                     WaterStyleProfileEditor.DrawContactFoamFields(_styleProfileSerializedObject);
+                    WaterStyleProfileEditor.DrawWakeFields(_styleProfileSerializedObject);
+                    WaterStyleProfileEditor.DrawPainterlyFields(_styleProfileSerializedObject);
                 }
 
                 var flatController = target as Water25DController;

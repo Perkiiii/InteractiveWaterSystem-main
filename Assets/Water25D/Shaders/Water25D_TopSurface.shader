@@ -24,6 +24,11 @@ Shader "Water25D/Top Surface"
         _ReflectionEnabled("Reflection Enabled", Float) = 0
         _ReflectionFallback("Stylized Reflection", Float) = 0
         _ReflectionStrength("Reflection Strength", Range(0, 1)) = 0.35
+        _RingMaskAtlas("Ring Mask Atlas", 2D) = "white" {}
+        _FoamMaskAtlas("Foam Mask Atlas", 2D) = "white" {}
+        _WakeMaskAtlas("Wake Mask Atlas", 2D) = "white" {}
+        _PainterlyMasksEnabled("Painterly Masks Enabled", Float) = 0
+        _PainterlyAgeFrames("Painterly Age Frames", Float) = 0
     }
 
     SubShader
@@ -48,6 +53,12 @@ Shader "Water25D/Top Surface"
         SAMPLER(sampler_RippleTexture);
         TEXTURE2D(_ReflectionTexture);
         SAMPLER(sampler_ReflectionTexture);
+        TEXTURE2D(_RingMaskAtlas);
+        SAMPLER(sampler_RingMaskAtlas);
+        TEXTURE2D(_FoamMaskAtlas);
+        SAMPLER(sampler_FoamMaskAtlas);
+        TEXTURE2D(_WakeMaskAtlas);
+        SAMPLER(sampler_WakeMaskAtlas);
 
         #define WATER_MAX_RINGS 16
         #define WATER_MAX_CONTACT_FOAMS 8
@@ -63,14 +74,17 @@ Shader "Water25D/Top Surface"
             float _WaterRingCount;
             float4 _WaterRingsA[WATER_MAX_RINGS];
             float4 _WaterRingsB[WATER_MAX_RINGS];
+            float4 _WaterRingsC[WATER_MAX_RINGS];
             float _WaterFoamCount;
             float4 _WaterFoamsA[WATER_MAX_CONTACT_FOAMS];
             float4 _WaterFoamsB[WATER_MAX_CONTACT_FOAMS];
+            float4 _WaterFoamsC[WATER_MAX_CONTACT_FOAMS];
             float _WaterFoamSoftness;
             float _FoamReflectionOcclusion;
             float _WaterWakeCount;
             float4 _WaterWakesA[WATER_MAX_WAKES];
             float4 _WaterWakesB[WATER_MAX_WAKES];
+            float4 _WaterWakesC[WATER_MAX_WAKES];
             float _WakeFadePower;
             float _WaveAmplitude;
             float _WaveLength;
@@ -81,7 +95,26 @@ Shader "Water25D/Top Surface"
             float _ReflectionFallback;
             float _ReflectionStrength;
             float4x4 _ReflectionViewProjection;
+            float _PainterlyMasksEnabled;
+            float _PainterlyAgeFrames;
+            float _RingMaskAtlasValid;
+            float4 _RingMaskAtlasGrid;
+            float _RingMaskVariantCount;
+            float _RingMaskFrameCount;
+            float _RingMaskInfluence;
+            float _FoamMaskAtlasValid;
+            float4 _FoamMaskAtlasGrid;
+            float _FoamMaskVariantCount;
+            float _FoamMaskFrameCount;
+            float _FoamMaskInfluence;
+            float _WakeMaskAtlasValid;
+            float4 _WakeMaskAtlasGrid;
+            float _WakeMaskVariantCount;
+            float _WakeMaskFrameCount;
+            float _WakeMaskInfluence;
         CBUFFER_END
+
+        #include "Assets/Water25D/Shaders/Water25D_InteractionMasks.hlsl"
 
         struct Attributes
         {
@@ -116,11 +149,30 @@ Shader "Water25D/Top Surface"
 
                 float4 foamA = _WaterFoamsA[foamIndex];
                 float4 foamB = _WaterFoamsB[foamIndex];
+                float4 foamC = _WaterFoamsC[foamIndex];
                 float2 halfSize = max(float2(0.001, 0.001), float2(foamA.z, foamB.x));
                 float2 ellipseOffset = (localXZ - foamA.xy) / halfSize;
                 float radialDistance = length(ellipseOffset);
                 float softness = max(0.001, _WaterFoamSoftness / min(halfSize.x, halfSize.y));
+                if (radialDistance > 1.0 + softness)
+                {
+                    continue;
+                }
+
                 float ellipse = 1.0 - smoothstep(1.0, 1.0 + softness, radialDistance);
+                if (_PainterlyMasksEnabled > 0.5 && _FoamMaskAtlasValid > 0.5 && _FoamMaskInfluence > 0.0 && ellipse > 0.0)
+                {
+                    float2 maskOffset = WaterRotateInteractionUV(ellipseOffset, foamC.y);
+                    if (foamC.w < 0.0)
+                    {
+                        maskOffset.y = -maskOffset.y;
+                    }
+
+                    float2 maskUV = maskOffset * 0.5 + 0.5;
+                    float painterlyMask = WaterSampleFoamMask(maskUV, foamC, 1.0 - saturate(foamB.y));
+                    ellipse = WaterApplyInteractionMask(ellipse, painterlyMask, _FoamMaskInfluence);
+                }
+
                 float breakup = 0.84 +
                     0.16 * sin(dot(localXZ - foamA.xy, float2(1.73, 2.37)) + foamB.w * 6.2831853 + _Time.y * 0.45);
                 float contactAmount = lerp(0.72, 1.0, saturate(foamB.z));
@@ -149,6 +201,7 @@ Shader "Water25D/Top Surface"
 
                 float4 wakeA = _WaterWakesA[wakeIndex];
                 float4 wakeB = _WaterWakesB[wakeIndex];
+                float4 wakeC = _WaterWakesC[wakeIndex];
                 float2 start = wakeA.xy;
                 float2 end = wakeA.zw;
                 float halfWidth = max(0.001, wakeB.x);
@@ -169,6 +222,25 @@ Shader "Water25D/Top Surface"
                 float distanceToCapsule = distance(localXZ, closest);
                 float edgeSoftness = max(0.002, halfWidth * 0.45);
                 float capsule = 1.0 - smoothstep(halfWidth, halfWidth + edgeSoftness, distanceToCapsule);
+                if (_PainterlyMasksEnabled > 0.5 && _WakeMaskAtlasValid > 0.5 && _WakeMaskInfluence > 0.0 && capsule > 0.0)
+                {
+                    float segmentLength = sqrt(max(segmentLengthSq, 0.000001));
+                    float2 tangent = segment / segmentLength;
+                    float2 normal = float2(-tangent.y, tangent.x);
+                    float alongDistance = dot(localXZ - start, tangent);
+                    float sideDistance = dot(localXZ - start, normal);
+                    float2 maskUV = float2(
+                        (alongDistance + halfWidth) / max(0.001, segmentLength + 2.0 * halfWidth),
+                        sideDistance / max(0.001, 2.0 * halfWidth) + 0.5);
+                    if (wakeC.w < 0.0)
+                    {
+                        maskUV.y = 1.0 - maskUV.y;
+                    }
+
+                    float painterlyMask = WaterSampleWakeMask(maskUV, wakeC, wakeB.y);
+                    capsule = WaterApplyInteractionMask(capsule, painterlyMask, _WakeMaskInfluence);
+                }
+
                 float ageFade = pow(saturate(1.0 - wakeB.y), max(0.1, _WakeFadePower));
                 float breakup = 0.86 +
                     0.14 * sin(dot(localXZ - closest, float2(2.11, 1.37)) + wakeB.w * 6.2831853);
@@ -251,12 +323,28 @@ Shader "Water25D/Top Surface"
 
                     float4 ringA = _WaterRingsA[ringIndex];
                     float4 ringB = _WaterRingsB[ringIndex];
+                    float4 ringC = _WaterRingsC[ringIndex];
                     float age01 = saturate(ringA.z);
                     float radius = lerp(ringB.x, ringB.y, age01);
+                    float2 ringOffset = localXZ - ringA.xy;
+                    float ringBounds = radius + ringB.z + ringB.w;
+                    if (length(ringOffset) > ringBounds)
+                    {
+                        continue;
+                    }
+
                     float distanceFromRing = abs(distance(localXZ, ringA.xy) - radius);
                     float thickness = max(0.0001, ringB.z);
                     float softness = max(0.0001, ringB.w);
                     float annulus = 1.0 - smoothstep(thickness, thickness + softness, distanceFromRing);
+                    if (_PainterlyMasksEnabled > 0.5 && _RingMaskAtlasValid > 0.5 && _RingMaskInfluence > 0.0 && annulus > 0.0)
+                    {
+                        float2 maskOffset = WaterRotateInteractionUV(ringOffset, ringC.y);
+                        float2 maskUV = maskOffset / max(0.001, 2.0 * ringBounds) + 0.5;
+                        float painterlyMask = WaterSampleRingMask(maskUV, ringC, age01);
+                        annulus = WaterApplyInteractionMask(annulus, painterlyMask, _RingMaskInfluence);
+                    }
+
                     float fade = (1.0 - age01) * saturate(ringA.w);
                     ringHighlight = saturate(ringHighlight + annulus * fade);
                 }

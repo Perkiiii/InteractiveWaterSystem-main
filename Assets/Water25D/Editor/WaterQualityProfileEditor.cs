@@ -77,6 +77,15 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawPainterlyFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Painterly Interaction Quality", delegate
+            {
+                Property(serializedObject, "_enablePainterlyInteractionMasks", "Enable Painterly Masks", "Use configured grayscale atlases when valid; analytical interaction geometry remains the fallback.");
+                Property(serializedObject, "_enablePainterlyAgeFrames", "Enable Age Frames", "Advance an optional atlas frame from the deterministic interaction age. One-frame atlases remain valid.");
+            });
+        }
+
         public static bool DrawAmbientBandField(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water25D Ambient Wave Bands", delegate
@@ -138,6 +147,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Surface Rings", false, DrawSurfaceRingFields);
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
             DrawStandaloneSection(serializedObject, "Wake Capacity", false, DrawWakeFields);
+            DrawStandaloneSection(serializedObject, "Painterly Interaction", false, DrawPainterlyFields);
             DrawValidation(serializedObject, profile);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

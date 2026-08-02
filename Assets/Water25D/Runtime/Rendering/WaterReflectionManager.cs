@@ -21,7 +21,8 @@ namespace Water25D.Rendering
             internal float ResolutionScale;
             internal int UpdateIntervalFrames;
             internal float Strength;
-            internal readonly MaterialPropertyBlock PropertyBlock = new MaterialPropertyBlock();
+            internal WaterReflectionRenderState State { get; private set; }
+            internal int StateVersion { get; private set; }
 
             internal ReflectionRegistration(
                 WaterReflectionManager owner,
@@ -43,6 +44,8 @@ namespace Water25D.Rendering
                 ResolutionScale = Mathf.Clamp(resolutionScale, 0.1f, 1f);
                 UpdateIntervalFrames = Mathf.Clamp(updateIntervalFrames, 1, 120);
                 Strength = Mathf.Clamp01(strength);
+                State = WaterReflectionRenderState.ForMode(mode, Strength);
+                StateVersion = 0;
             }
 
             public void Dispose()
@@ -56,23 +59,22 @@ namespace Water25D.Rendering
                 Owner = null;
             }
 
-            internal void Apply(Texture texture, Matrix4x4 viewProjection, bool enabled, bool fallback)
+            internal void Publish(Texture texture, Matrix4x4 viewProjection, bool enabled, bool fallback, int renderFrame)
             {
-                if (SurfaceRenderer == null)
+                var nextState = new WaterReflectionRenderState(
+                    texture,
+                    viewProjection,
+                    enabled,
+                    fallback,
+                    Strength,
+                    renderFrame);
+                if (State.Equals(nextState))
                 {
                     return;
                 }
 
-                SurfaceRenderer.GetPropertyBlock(PropertyBlock);
-                if (texture != null)
-                {
-                    PropertyBlock.SetTexture(WaterShaderIds.ReflectionTexture, texture);
-                }
-                PropertyBlock.SetMatrix(WaterShaderIds.ReflectionViewProjection, viewProjection);
-                PropertyBlock.SetFloat(WaterShaderIds.ReflectionEnabled, enabled ? 1f : 0f);
-                PropertyBlock.SetFloat(WaterShaderIds.ReflectionFallback, fallback ? 1f : 0f);
-                PropertyBlock.SetFloat(WaterShaderIds.ReflectionStrength, Strength);
-                SurfaceRenderer.SetPropertyBlock(PropertyBlock);
+                State = nextState;
+                StateVersion++;
             }
 
             internal WaterReflectionGroupKey GetKey()
@@ -279,7 +281,7 @@ namespace Water25D.Rendering
             {
                 for (var i = 0; i < _registrations.Count; i++)
                 {
-                    _registrations[i].Apply(texture, viewProjection, enabled, fallback);
+                    _registrations[i].Publish(texture, viewProjection, enabled, fallback, _lastRenderFrame);
                 }
             }
 
@@ -293,6 +295,11 @@ namespace Water25D.Rendering
                 if (objectToDestroy == null)
                 {
                     return;
+                }
+
+                if (objectToDestroy is RenderTexture renderTexture)
+                {
+                    renderTexture.Release();
                 }
 
                 if (Application.isPlaying)
@@ -376,6 +383,11 @@ namespace Water25D.Rendering
             }
 
             _groups.Clear();
+            for (var i = 0; i < _registrations.Count; i++)
+            {
+                _registrations[i].Publish(null, Matrix4x4.identity, false, false, -1);
+            }
+
             _registrations.Clear();
             if (_instance == this)
             {
