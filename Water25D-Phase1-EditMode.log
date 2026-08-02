@@ -1,0 +1,26 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.5/staging' branch; Version is '6000.5.4f1 (d550df8bd089) revision 13979871'; Using compiler version '194234433'; Build Type 'Release'
+OS: 'Windows 11  (10.0.22631) Core' Language: 'en' Physical Memory: 32711 MB
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-samue" at "2026-08-02T10:18:13.690016Z"
+System  architecture: x64
+Process architecture: x64
+Date: 2026-08-02T10:18:13Z
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.5.4f1\Editor\Unity.exe
+-batchmode
+-nographics
+-projectPath
+E:\GameDev\Projects\InteractiveWaterSystem-main\InteractiveWaterSystem-main
+-runTests
+-testPlatform
+EditMode
+-testResults
+E:\GameDev\Projects\InteractiveWaterSystem-main\InteractiveWaterSystem-main\Water25D-Phase1-EditMode-results.xml
+-logFile
+E:\GameDev\Projects\InteractiveWaterSystem-main\InteractiveWaterSystem-main\Water25D-Phase1-EditMode.log
+-quit
+Successfully changed project path to: E:\GameDev\Projects\InteractiveWaterSystem-main\InteractiveWaterSystem-main
+E:/GameDev/Projects/InteractiveWaterSystem-main/InteractiveWaterSystem-main
+Exiting without the bug reporter. Application will terminate with return code 1

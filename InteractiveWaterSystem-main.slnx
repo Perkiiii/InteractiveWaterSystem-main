@@ -1,12 +1,12 @@
 ﻿<Solution>
-  <Project Path="SingularityGroup.HotReload.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="SingularityGroup.HotReload.Editor.csproj" />
   <Project Path="Water25D.Tests.EditMode.csproj" />
   <Project Path="SingularityGroup.HotReload.Runtime.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
-  <Project Path="SingularityGroup.HotReload.Runtime.Public.csproj" />
   <Project Path="Water25D.Editor.csproj" />
   <Project Path="Water25D.Runtime.csproj" />
-  <Project Path="Water25D.Benchmark.csproj" />
+  <Project Path="SingularityGroup.HotReload.Runtime.Public.csproj" />
   <Project Path="Water25D.Tests.PlayMode.csproj" />
+  <Project Path="Water25D.Benchmark.csproj" />
 </Solution>
