@@ -18,6 +18,8 @@ namespace Water25D.Editor
         private const string RippleMaterialPath = "Assets/Water25D/Materials/Water25D_RippleSimulation.mat";
         private const string StyleProfilePath = "Assets/Water25D/Profiles/Water25D_DefaultStyle.asset";
         private const string QualityProfilePath = "Assets/Water25D/Profiles/Water25D_MediumQuality.asset";
+        private const string FlatStylizedStyleProfilePath = "Assets/Water25D/Profiles/Water25D_FlatStylizedStyle.asset";
+        private const string FlatStylizedQualityProfilePath = "Assets/Water25D/Profiles/Water25D_FlatMediumQuality.asset";
 
         private static bool _isRepairingLoadedControllers;
 
@@ -42,8 +44,16 @@ namespace Water25D.Editor
             var topMaterial = AssetDatabase.LoadAssetAtPath<Material>(TopMaterialPath);
             var frontMaterial = AssetDatabase.LoadAssetAtPath<Material>(FrontMaterialPath);
             var rippleMaterial = AssetDatabase.LoadAssetAtPath<Material>(RippleMaterialPath);
-            var styleProfile = AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(StyleProfilePath);
-            var qualityProfile = AssetDatabase.LoadAssetAtPath<WaterQualityProfile>(QualityProfilePath);
+            var styleProfilePath = isNewObject ? FlatStylizedStyleProfilePath : StyleProfilePath;
+            var qualityProfilePath = isNewObject ? FlatStylizedQualityProfilePath : QualityProfilePath;
+            var styleProfile = AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(styleProfilePath);
+            var qualityProfile = AssetDatabase.LoadAssetAtPath<WaterQualityProfile>(qualityProfilePath);
+            styleProfile = styleProfile != null
+                ? styleProfile
+                : AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(StyleProfilePath);
+            qualityProfile = qualityProfile != null
+                ? qualityProfile
+                : AssetDatabase.LoadAssetAtPath<WaterQualityProfile>(QualityProfilePath);
             if (topMaterial == null || frontMaterial == null || rippleMaterial == null || styleProfile == null || qualityProfile == null)
             {
                 return false;

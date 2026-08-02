@@ -140,6 +140,16 @@ namespace Water25D.Editor
                     WaterStyleProfileEditor.DrawSurfaceFields(_styleProfileSerializedObject);
                 }
 
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Flat-Stylized Surface Colour", "Rendering.FlatStylized.Surface", WaterStyleProfileEditor.DrawStylizedSurfaceFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Ambient Surface Detail", "Rendering.FlatStylized.AmbientDetail", WaterStyleProfileEditor.DrawAmbientDetailFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Fresnel and Highlights", "Rendering.FlatStylized.FresnelHighlights", WaterStyleProfileEditor.DrawFresnelHighlightFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Reflection Presentation", "Rendering.FlatStylized.ReflectionPresentation", WaterStyleProfileEditor.DrawReflectionPresentationFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Boundary Foam", "Rendering.FlatStylized.BoundaryFoam", WaterStyleProfileEditor.DrawBoundaryFoamFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Optional Refraction", "Rendering.FlatStylized.Refraction", WaterStyleProfileEditor.DrawRefractionFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Optional Caustics", "Rendering.FlatStylized.Caustics", WaterStyleProfileEditor.DrawCausticFields);
+                DrawNestedStyleSection(_styleProfileSerializedObject, styleProfile, "Front Surface Presentation", "Rendering.FlatStylized.FrontSurface", WaterStyleProfileEditor.DrawFrontSurfaceFields);
+                DrawNestedQualitySection(_qualityProfileSerializedObject, "Phase 3 Presentation Quality", "Rendering.FlatStylized.Quality", WaterQualityProfileEditor.DrawPresentationFields);
+
                 var materialOpen = BeginNestedSection("Rendering.Materials", "Material Templates and Sorting");
                 if (materialOpen)
                 {
@@ -296,6 +306,7 @@ namespace Water25D.Editor
             {
                 Property("_reflectionCameraSource", "Camera Source", "Camera used to define the shared planar reflection group. Assign explicitly for deterministic grouping.");
                 Property("_reflectionCullingMask", "Planar Culling Mask", "Layers rendered by the shared reflection camera. Exclude water and reflection-helper layers when recursion is possible.");
+                Property("_reflectionExclusionMask", "Reflection Exclusion Mask", "Additional layers excluded from the shared planar reflection. The water surface layer is excluded automatically.");
                 Property("_reflectionResolutionScale", "Resolution Scale", "Fraction of the source camera resolution used by the shared reflection texture.");
                 Property("_reflectionUpdateIntervalFrames", "Update Interval", "Minimum frame interval between adaptive reflection renders unless the camera moves.");
                 Property("_reflectionStrength", "Reflection Strength", "Blend strength applied to the planar reflection.");
@@ -655,6 +666,20 @@ namespace Water25D.Editor
         {
             if (BeginNestedSection(stateKey, label) && profile != null)
             {
+                draw(profile);
+            }
+        }
+
+        private void DrawNestedStyleSection(
+            SerializedObject profile,
+            WaterStyleProfile styleProfile,
+            string label,
+            string stateKey,
+            Func<SerializedObject, bool> draw)
+        {
+            if (BeginNestedSection(stateKey, label) && profile != null && styleProfile != null)
+            {
+                DrawSharedProfileNotice(styleProfile, true);
                 draw(profile);
             }
         }

@@ -20,6 +20,132 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawStylizedSurfaceFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Flat-Stylized Surface Colour", delegate
+            {
+                Property(serializedObject, "_shallowColor", "Shallow Colour", "Near-waterline colour for the top surface gradient.");
+                Property(serializedObject, "_deepColor", "Deep Colour", "Far/deeper colour for the top surface gradient.");
+                Property(serializedObject, "_topDepthPower", "Depth Gradient Power", "Shapes the normalized flat top-surface colour gradient without displacing vertices.");
+                Property(serializedObject, "_topOpacity", "Top Opacity", "Final top-surface alpha before interaction foam is added.");
+                Property(serializedObject, "_colorBandSteps", "Colour Band Steps", "Fixed quantization steps used for the restrained stylized colour banding.");
+                Property(serializedObject, "_colorBandInfluence", "Colour Band Influence", "Blend from continuous colours to the fixed stylized bands.");
+            });
+        }
+
+        public static bool DrawAmbientDetailFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Ambient Surface Detail", delegate
+            {
+                Property(serializedObject, "_surfaceNormalTexture", "Optional Normal Texture", "Optional package-owned normal input. Missing textures use deterministic procedural detail.");
+                Property(serializedObject, "_surfaceDetailTexture", "Optional Detail Texture", "Optional secondary breakup input. Missing textures keep the procedural second layer.");
+                Property(serializedObject, "_normalLayer1Scale", "Layer 1 Scale", "World-local XZ scale for the calm primary normal layer.");
+                Property(serializedObject, "_normalLayer1Speed", "Layer 1 Speed", "Slow panning speed for the primary normal layer.");
+                Property(serializedObject, "_normalLayer1Strength", "Layer 1 Strength", "Strength of the primary ambient normal layer.");
+                Property(serializedObject, "_normalLayer2Scale", "Layer 2 Scale", "World-local XZ scale for the restrained secondary detail.");
+                Property(serializedObject, "_normalLayer2Speed", "Layer 2 Speed", "Slow panning speed for the secondary detail.");
+                Property(serializedObject, "_normalLayer2Strength", "Layer 2 Strength", "Strength of the secondary ambient detail layer.");
+                Property(serializedObject, "_ambientNormalStrength", "Ambient Normal Strength", "Final blend from a calm flat normal to the layered detail normal.");
+            });
+        }
+
+        public static bool DrawFresnelHighlightFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Fresnel and Stylized Highlights", delegate
+            {
+                Property(serializedObject, "_fresnelTint", "Fresnel Tint", "Tint blended toward grazing viewing angles.");
+                Property(serializedObject, "_fresnelStrength", "Fresnel Strength", "Grazing-angle contribution used by both top and front surfaces.");
+                Property(serializedObject, "_fresnelPower", "Fresnel Power", "Power shaping the restrained grazing-angle response.");
+                Property(serializedObject, "_highlightColor", "Highlight Colour", "Colour of the optional broad stylized highlight.");
+                Property(serializedObject, "_highlightStrength", "Highlight Strength", "Strength of the optional broad highlight.");
+                Property(serializedObject, "_highlightThreshold", "Highlight Threshold", "Threshold for the stylized highlight response.");
+                Property(serializedObject, "_highlightSoftness", "Highlight Softness", "Soft edge around the highlight threshold.");
+                Property(serializedObject, "_highlightBreakup", "Highlight Breakup", "Deterministic low-frequency breakup applied to the highlight.");
+                Property(serializedObject, "_highlightDirection", "Highlight Direction", "World-space light direction used by the stylized highlight.");
+            });
+        }
+
+        public static bool DrawReflectionPresentationFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Reflection Presentation", delegate
+            {
+                Property(serializedObject, "_stylizedReflectionTint", "Stylized Reflection Tint", "Tint for the camera-free horizon-to-sky reflection fallback.");
+                Property(serializedObject, "_stylizedReflectionHorizonColor", "Stylized Horizon Colour", "Horizon colour used by the camera-free stylized reflection.");
+                Property(serializedObject, "_stylizedReflectionTopColor", "Stylized Top Colour", "Top colour used by the camera-free stylized reflection.");
+                Property(serializedObject, "_stylizedReflectionStrength", "Stylized Reflection Strength", "Strength of the camera-free stylized reflection.");
+                Property(serializedObject, "_planarReflectionTint", "Planar Reflection Tint", "Tint applied to the shared adaptive planar reflection texture.");
+                Property(serializedObject, "_planarReflectionStrength", "Planar Reflection Strength", "Per-profile contribution of the shared planar reflection.");
+                Property(serializedObject, "_ambientReflectionDistortion", "Ambient Distortion", "Small normal-driven offset for the reflection lookup.");
+                Property(serializedObject, "_ringNormalStrength", "Ring Normal Strength", "Interaction-ring normal contribution used by reflection and highlights.");
+                Property(serializedObject, "_ringReflectionDistortion", "Ring Reflection Distortion", "Reflection lookup distortion contributed by active rings.");
+                Property(serializedObject, "_wakeNormalStrength", "Wake Normal Strength", "Interaction-wake normal contribution used by reflection and highlights.");
+                Property(serializedObject, "_wakeReflectionDistortion", "Wake Reflection Distortion", "Reflection lookup distortion contributed by active wakes.");
+            });
+        }
+
+        public static bool DrawBoundaryFoamFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Boundary Foam", delegate
+            {
+                Property(serializedObject, "_boundaryFoamWidth", "Boundary Width", "Normalized water-surface edge band used for deterministic boundary foam.");
+                Property(serializedObject, "_boundaryFoamSoftness", "Boundary Softness", "Soft edge around the boundary foam band.");
+                Property(serializedObject, "_boundaryFoamBreakup", "Boundary Breakup", "Low-frequency deterministic breakup of the boundary foam.");
+                Property(serializedObject, "_boundaryFoamIntensity", "Boundary Intensity", "Maximum boundary foam contribution.");
+            });
+        }
+
+        public static bool DrawRefractionFields(SerializedObject serializedObject)
+        {
+            var changed = DrawProperties(serializedObject, "Edit Water25D Optional Refraction", delegate
+            {
+                Property(serializedObject, "_refractionSourceAvailable", "Opaque Texture Source Available", "Set only when the URP camera provides a valid opaque texture. The feature remains disabled otherwise.");
+                Property(serializedObject, "_refractionTint", "Refraction Tint", "Tint applied to the optional opaque-texture sample.");
+                Property(serializedObject, "_refractionStrength", "Refraction Strength", "Small normal-driven screen-space offset. This is optional and source-gated.");
+                Property(serializedObject, "_frontDistortionSourceAvailable", "Sorting Layer Texture Available", "Set only when the 2D Renderer provides a valid Camera Sorting Layer Texture.");
+                Property(serializedObject, "_frontDistortionTint", "Front Distortion Tint", "Tint applied to the optional front-surface sorting-layer sample.");
+                Property(serializedObject, "_frontDistortionStrength", "Front Distortion Strength", "Small normal-driven front-surface screen-space offset.");
+            });
+            if (serializedObject != null)
+            {
+                EditorGUILayout.HelpBox("Optional source inputs are opt-in and safely bypassed when unavailable. No global interaction render texture is created.", MessageType.Info);
+            }
+            return changed;
+        }
+
+        public static bool DrawCausticFields(SerializedObject serializedObject)
+        {
+            var changed = DrawProperties(serializedObject, "Edit Water25D Optional Caustics", delegate
+            {
+                Property(serializedObject, "_causticTexture", "Optional Caustic Texture", "Optional package-owned grayscale caustic input. A missing texture disables the feature safely.");
+                Property(serializedObject, "_causticScale", "Scale", "World-local XZ scale for the optional caustic texture.");
+                Property(serializedObject, "_causticSpeed", "Speed", "Slow panning speed for the optional caustic texture.");
+                Property(serializedObject, "_causticTint", "Tint", "Tint applied to the optional caustic contribution.");
+                Property(serializedObject, "_causticIntensity", "Intensity", "Strength of the optional caustic contribution.");
+                Property(serializedObject, "_causticDepthFade", "Depth Fade", "Fade toward the deeper part of the front surface.");
+            });
+            if (serializedObject != null)
+            {
+                var texture = serializedObject.FindProperty("_causticTexture");
+                if (texture != null && texture.objectReferenceValue == null)
+                {
+                    EditorGUILayout.HelpBox("No caustic texture is assigned; the caustic quality toggle will remain safely inactive.", MessageType.Info);
+                }
+            }
+            return changed;
+        }
+
+        public static bool DrawFrontSurfaceFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Front Surface Presentation", delegate
+            {
+                Property(serializedObject, "_frontSurfaceColor", "Front Surface Colour", "Shallow colour at the top of the XY front surface.");
+                Property(serializedObject, "_frontDeepColor", "Front Deep Colour", "Deep colour toward the bottom of the XY front surface.");
+                Property(serializedObject, "_frontDepthPower", "Front Depth Power", "Shapes the front-surface depth gradient.");
+                Property(serializedObject, "_frontOpacity", "Front Opacity", "Final front-surface alpha before interaction foam is added.");
+                Property(serializedObject, "_waterlineBandWidth", "Waterline Band Width", "Width of the coherent waterline foam band shared with interaction presentation.");
+            });
+        }
+
         public static bool DrawAmbientFields(SerializedObject serializedObject)
         {
             var changed = DrawProperties(serializedObject, "Edit Water Style Ambient Waves", delegate
@@ -194,7 +320,15 @@ namespace Water25D.Editor
             }
 
             DrawStandaloneSection(serializedObject, "Surface Colors", true, DrawSurfaceFields);
+            DrawStandaloneSection(serializedObject, "Flat-Stylized Surface Colour", true, DrawStylizedSurfaceFields);
             DrawStandaloneSection(serializedObject, "Ambient Waves", true, DrawAmbientFields);
+            DrawStandaloneSection(serializedObject, "Ambient Surface Detail", false, DrawAmbientDetailFields);
+            DrawStandaloneSection(serializedObject, "Fresnel and Highlights", false, DrawFresnelHighlightFields);
+            DrawStandaloneSection(serializedObject, "Reflection Presentation", false, DrawReflectionPresentationFields);
+            DrawStandaloneSection(serializedObject, "Boundary Foam", false, DrawBoundaryFoamFields);
+            DrawStandaloneSection(serializedObject, "Optional Refraction", false, DrawRefractionFields);
+            DrawStandaloneSection(serializedObject, "Optional Caustics", false, DrawCausticFields);
+            DrawStandaloneSection(serializedObject, "Front Surface Presentation", false, DrawFrontSurfaceFields);
             DrawStandaloneSection(serializedObject, "Contact Ripples", false, DrawRippleFields);
             DrawStandaloneSection(serializedObject, "Procedural Surface Rings", false, DrawRingFields);
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);

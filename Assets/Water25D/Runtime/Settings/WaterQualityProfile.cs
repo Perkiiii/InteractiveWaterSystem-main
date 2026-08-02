@@ -27,6 +27,10 @@ namespace Water25D
         public int MaximumWakeEmissionsPerStep;
         public bool EnablePainterlyInteractionMasks;
         public bool EnablePainterlyAgeFrames;
+        public bool EnableSecondaryAmbientDetail;
+        public bool EnableStylizedHighlights;
+        public bool EnableRefraction;
+        public bool EnableCaustics;
 
         public static WaterQualitySettings Default => new WaterQualitySettings
         {
@@ -50,7 +54,11 @@ namespace Water25D
             MaximumWakeSegments = 8,
             MaximumWakeEmissionsPerStep = 2,
             EnablePainterlyInteractionMasks = true,
-            EnablePainterlyAgeFrames = true
+            EnablePainterlyAgeFrames = true,
+            EnableSecondaryAmbientDetail = true,
+            EnableStylizedHighlights = true,
+            EnableRefraction = false,
+            EnableCaustics = false
         };
 
         public void Sanitize()
@@ -111,10 +119,14 @@ namespace Water25D
                    MaximumSurfaceRings == other.MaximumSurfaceRings &&
                    MaximumContactFoams == other.MaximumContactFoams &&
                    MaximumTrackedSurfaceBodies == other.MaximumTrackedSurfaceBodies &&
-                   MaximumWakeSegments == other.MaximumWakeSegments &&
-                   MaximumWakeEmissionsPerStep == other.MaximumWakeEmissionsPerStep &&
-                   EnablePainterlyInteractionMasks == other.EnablePainterlyInteractionMasks &&
-                   EnablePainterlyAgeFrames == other.EnablePainterlyAgeFrames;
+                    MaximumWakeSegments == other.MaximumWakeSegments &&
+                    MaximumWakeEmissionsPerStep == other.MaximumWakeEmissionsPerStep &&
+                    EnablePainterlyInteractionMasks == other.EnablePainterlyInteractionMasks &&
+                    EnablePainterlyAgeFrames == other.EnablePainterlyAgeFrames &&
+                    EnableSecondaryAmbientDetail == other.EnableSecondaryAmbientDetail &&
+                    EnableStylizedHighlights == other.EnableStylizedHighlights &&
+                    EnableRefraction == other.EnableRefraction &&
+                    EnableCaustics == other.EnableCaustics;
         }
 
         public override bool Equals(object obj)
@@ -146,7 +158,11 @@ namespace Water25D
                 hash = hash * 31 + MaximumWakeSegments;
                 hash = hash * 31 + MaximumWakeEmissionsPerStep;
                 hash = hash * 31 + EnablePainterlyInteractionMasks.GetHashCode();
-                return hash * 31 + EnablePainterlyAgeFrames.GetHashCode();
+                hash = hash * 31 + EnablePainterlyAgeFrames.GetHashCode();
+                hash = hash * 31 + EnableSecondaryAmbientDetail.GetHashCode();
+                hash = hash * 31 + EnableStylizedHighlights.GetHashCode();
+                hash = hash * 31 + EnableRefraction.GetHashCode();
+                return hash * 31 + EnableCaustics.GetHashCode();
             }
         }
     }
@@ -186,6 +202,14 @@ namespace Water25D
         [SerializeField] private bool _enablePainterlyInteractionMasks = true;
         [SerializeField] private bool _enablePainterlyAgeFrames = true;
 
+        [Header("Phase 3 Presentation")]
+        [SerializeField] private bool _enableSecondaryAmbientDetail = true;
+        [SerializeField] private bool _enableStylizedHighlights = true;
+        [Tooltip("Requires the style profile's valid opaque-texture source flag.")]
+        [SerializeField] private bool _enableRefraction;
+        [Tooltip("Requires a caustic texture in the style profile.")]
+        [SerializeField] private bool _enableCaustics;
+
         [Header("Geometry")]
         [Min(0.5f)] [SerializeField] private float _topVerticesPerUnit = 8f;
 
@@ -223,7 +247,11 @@ namespace Water25D
                     ? _maximumWakeEmissionsPerStep
                     : WaterQualitySettings.Default.MaximumWakeEmissionsPerStep,
                 EnablePainterlyInteractionMasks = _enablePainterlyInteractionMasks,
-                EnablePainterlyAgeFrames = _enablePainterlyAgeFrames
+                EnablePainterlyAgeFrames = _enablePainterlyAgeFrames,
+                EnableSecondaryAmbientDetail = _enableSecondaryAmbientDetail,
+                EnableStylizedHighlights = _enableStylizedHighlights,
+                EnableRefraction = _enableRefraction,
+                EnableCaustics = _enableCaustics
             };
             settings.Sanitize();
             return settings;
@@ -253,6 +281,10 @@ namespace Water25D
             _maximumWakeEmissionsPerStep = settings.MaximumWakeEmissionsPerStep;
             _enablePainterlyInteractionMasks = settings.EnablePainterlyInteractionMasks;
             _enablePainterlyAgeFrames = settings.EnablePainterlyAgeFrames;
+            _enableSecondaryAmbientDetail = settings.EnableSecondaryAmbientDetail;
+            _enableStylizedHighlights = settings.EnableStylizedHighlights;
+            _enableRefraction = settings.EnableRefraction;
+            _enableCaustics = settings.EnableCaustics;
         }
     }
 }

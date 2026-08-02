@@ -3,7 +3,59 @@ Shader "Water25D/Top Surface"
     Properties
     {
         _BaseColor("Top Color", Color) = (0.2, 0.48, 0.6, 0.92)
+        _ShallowColor("Shallow Color", Color) = (0.2, 0.48, 0.6, 0.92)
+        _DeepColor("Deep Color", Color) = (0.04, 0.22, 0.36, 0.94)
         _FoamColor("Foam Color", Color) = (0.78, 0.95, 1, 0.8)
+        _TopDepthPower("Top Depth Power", Float) = 0.9
+        _TopOpacity("Top Opacity", Range(0, 1)) = 0.92
+        _ColorBandSteps("Colour Band Steps", Float) = 4
+        _ColorBandInfluence("Colour Band Influence", Range(0, 1)) = 0.15
+        _SurfaceNormalTexture("Surface Normal Texture", 2D) = "bump" {}
+        _SurfaceDetailTexture("Surface Detail Texture", 2D) = "gray" {}
+        _NormalLayer1Scale("Normal Layer 1 Scale", Vector) = (0.55, 0.45, 0, 0)
+        _NormalLayer1Speed("Normal Layer 1 Speed", Vector) = (0.035, -0.021, 0, 0)
+        _NormalLayer1Strength("Normal Layer 1 Strength", Float) = 0.65
+        _NormalLayer2Scale("Normal Layer 2 Scale", Vector) = (1.15, 0.9, 0, 0)
+        _NormalLayer2Speed("Normal Layer 2 Speed", Vector) = (-0.017, 0.029, 0, 0)
+        _NormalLayer2Strength("Normal Layer 2 Strength", Float) = 0.25
+        _AmbientNormalStrength("Ambient Normal Strength", Range(0, 1)) = 0.1
+        _FresnelTint("Fresnel Tint", Color) = (0.75, 0.95, 1, 1)
+        _FresnelStrength("Fresnel Strength", Range(0, 1)) = 0.3
+        _FresnelPower("Fresnel Power", Float) = 4
+        _HighlightColor("Highlight Color", Color) = (0.88, 0.98, 1, 1)
+        _HighlightStrength("Highlight Strength", Range(0, 1)) = 0.18
+        _HighlightThreshold("Highlight Threshold", Range(0, 1)) = 0.65
+        _HighlightSoftness("Highlight Softness", Range(0.01, 1)) = 0.2
+        _HighlightBreakup("Highlight Breakup", Range(0, 1)) = 0.25
+        _HighlightDirection("Highlight Direction", Vector) = (-0.3, 0.85, -0.25, 0)
+        _StylizedReflectionTint("Stylized Reflection Tint", Color) = (1, 1, 1, 1)
+        _StylizedReflectionHorizonColor("Reflection Horizon Color", Color) = (0.22, 0.52, 0.68, 1)
+        _StylizedReflectionTopColor("Reflection Top Color", Color) = (0.48, 0.78, 0.88, 1)
+        _StylizedReflectionStrength("Stylized Reflection Strength", Range(0, 1)) = 0.3
+        _PlanarReflectionTint("Planar Reflection Tint", Color) = (1, 1, 1, 1)
+        _PlanarReflectionStrength("Planar Reflection Strength", Range(0, 1)) = 0.35
+        _AmbientReflectionDistortion("Ambient Reflection Distortion", Range(0, 0.05)) = 0.0025
+        _RingNormalStrength("Ring Normal Strength", Range(0, 1)) = 0.18
+        _RingReflectionDistortion("Ring Reflection Distortion", Range(0, 0.05)) = 0.008
+        _WakeNormalStrength("Wake Normal Strength", Range(0, 1)) = 0.12
+        _WakeReflectionDistortion("Wake Reflection Distortion", Range(0, 0.05)) = 0.006
+        _BoundaryFoamWidth("Boundary Foam Width", Range(0.0001, 0.5)) = 0.025
+        _BoundaryFoamSoftness("Boundary Foam Softness", Range(0, 0.5)) = 0.04
+        _BoundaryFoamBreakup("Boundary Foam Breakup", Range(0, 1)) = 0.25
+        _BoundaryFoamIntensity("Boundary Foam Intensity", Range(0, 1)) = 0.45
+        _RefractionSourceAvailable("Refraction Source Available", Float) = 0
+        _RefractionTint("Refraction Tint", Color) = (1, 1, 1, 1)
+        _RefractionStrength("Refraction Strength", Range(0, 0.02)) = 0.003
+        _CausticTexture("Caustic Texture", 2D) = "black" {}
+        _CausticTextureValid("Caustic Texture Valid", Float) = 0
+        _CausticScale("Caustic Scale", Vector) = (0.16, 0.16, 0, 0)
+        _CausticSpeed("Caustic Speed", Vector) = (0.018, -0.012, 0, 0)
+        _CausticTint("Caustic Tint", Color) = (0.78, 1, 0.82, 1)
+        _CausticIntensity("Caustic Intensity", Range(0, 1)) = 0.2
+        _CausticDepthFade("Caustic Depth Fade", Range(0, 1)) = 0.7
+        _StylizedHighlightsEnabled("Stylized Highlights Enabled", Float) = 1
+        _RefractionEnabled("Refraction Enabled", Float) = 0
+        _CausticsEnabled("Caustics Enabled", Float) = 0
         _RippleTexture("Ripple Texture", 2D) = "black" {}
         _RippleEnabled("Ripple Enabled", Float) = 0
         _RippleAmplitude("Ripple Amplitude", Float) = 0.18
@@ -48,9 +100,18 @@ Shader "Water25D/Top Surface"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Assets/Water25D/Shaders/Water25D_AmbientWaves.hlsl"
+        #include "Assets/Water25D/Shaders/Water25D_StylizedSurface.hlsl"
 
         TEXTURE2D(_RippleTexture);
         SAMPLER(sampler_RippleTexture);
+        TEXTURE2D(_SurfaceNormalTexture);
+        SAMPLER(sampler_SurfaceNormalTexture);
+        TEXTURE2D(_SurfaceDetailTexture);
+        SAMPLER(sampler_SurfaceDetailTexture);
+        TEXTURE2D(_CausticTexture);
+        SAMPLER(sampler_CausticTexture);
+        TEXTURE2D(_CameraOpaqueTexture);
+        SAMPLER(sampler_CameraOpaqueTexture);
         TEXTURE2D(_ReflectionTexture);
         SAMPLER(sampler_ReflectionTexture);
         TEXTURE2D(_RingMaskAtlas);
@@ -66,7 +127,59 @@ Shader "Water25D/Top Surface"
 
         CBUFFER_START(UnityPerMaterial)
             half4 _BaseColor;
+            half4 _ShallowColor;
+            half4 _DeepColor;
             half4 _FoamColor;
+            float _TopDepthPower;
+            float _TopOpacity;
+            float _ColorBandSteps;
+            float _ColorBandInfluence;
+            float _SurfaceNormalTextureValid;
+            float _SurfaceDetailTextureValid;
+            float4 _NormalLayer1Scale;
+            float4 _NormalLayer1Speed;
+            float _NormalLayer1Strength;
+            float4 _NormalLayer2Scale;
+            float4 _NormalLayer2Speed;
+            float _NormalLayer2Strength;
+            float _AmbientNormalStrength;
+            float4 _FresnelTint;
+            float _FresnelStrength;
+            float _FresnelPower;
+            float4 _HighlightColor;
+            float _HighlightStrength;
+            float _HighlightThreshold;
+            float _HighlightSoftness;
+            float _HighlightBreakup;
+            float4 _HighlightDirection;
+            float4 _StylizedReflectionTint;
+            float4 _StylizedReflectionHorizonColor;
+            float4 _StylizedReflectionTopColor;
+            float _StylizedReflectionStrength;
+            float4 _PlanarReflectionTint;
+            float _PlanarReflectionStrength;
+            float _AmbientReflectionDistortion;
+            float _RingNormalStrength;
+            float _RingReflectionDistortion;
+            float _WakeNormalStrength;
+            float _WakeReflectionDistortion;
+            float _BoundaryFoamWidth;
+            float _BoundaryFoamSoftness;
+            float _BoundaryFoamBreakup;
+            float _BoundaryFoamIntensity;
+            float _RefractionSourceAvailable;
+            float4 _RefractionTint;
+            float _RefractionStrength;
+            float4 _CausticScale;
+            float4 _CausticSpeed;
+            float4 _CausticTint;
+            float _CausticTextureValid;
+            float _CausticIntensity;
+            float _CausticDepthFade;
+            float _SecondaryAmbientDetailEnabled;
+            float _StylizedHighlightsEnabled;
+            float _RefractionEnabled;
+            float _CausticsEnabled;
             float _RippleEnabled;
             float _RippleAmplitude;
             float _SurfaceMode;
@@ -115,6 +228,49 @@ Shader "Water25D/Top Surface"
         CBUFFER_END
 
         #include "Assets/Water25D/Shaders/Water25D_InteractionMasks.hlsl"
+
+        float3 EvaluateStylizedSurfaceNormal(float2 localXZ)
+        {
+            float2 directionA = Water25DSafeDirection(_NormalLayer1Scale.xy);
+            float2 directionB = Water25DSafeDirection(_NormalLayer2Scale.xy);
+            float3 normalWS = Water25DProceduralNormal(
+                localXZ,
+                _Time.y,
+                directionA,
+                max(0.05, length(_NormalLayer1Scale.xy)),
+                dot(_NormalLayer1Speed.xy, directionA),
+                _NormalLayer1Strength,
+                directionB,
+                max(0.05, length(_NormalLayer2Scale.xy)),
+                dot(_NormalLayer2Speed.xy, directionB),
+                _NormalLayer2Strength);
+
+            if (_SurfaceNormalTextureValid > 0.5)
+            {
+                float2 normalUV = frac(localXZ * _NormalLayer1Scale.xy + _Time.y * _NormalLayer1Speed.xy);
+                float2 encoded = SAMPLE_TEXTURE2D(
+                    _SurfaceNormalTexture,
+                    sampler_SurfaceNormalTexture,
+                    normalUV).xy * 2.0 - 1.0;
+                float3 sampledNormal = Water25DSafeNormal(float3(encoded.x, 1.0, encoded.y));
+                normalWS = Water25DSafeNormal(lerp(normalWS, sampledNormal, saturate(_NormalLayer1Strength)));
+            }
+
+            if (_SecondaryAmbientDetailEnabled > 0.5 && _SurfaceDetailTextureValid > 0.5)
+            {
+                float2 detailUV = frac(localXZ * _NormalLayer2Scale.xy + _Time.y * _NormalLayer2Speed.xy);
+                float detail = SAMPLE_TEXTURE2D(
+                    _SurfaceDetailTexture,
+                    sampler_SurfaceDetailTexture,
+                    detailUV).r * 2.0 - 1.0;
+                normalWS = Water25DAddSurfaceSlope(
+                    normalWS,
+                    float2(detail, -detail * 0.75),
+                    _NormalLayer2Strength * 0.15);
+            }
+
+            return Water25DSafeNormal(lerp(float3(0.0, 1.0, 0.0), normalWS, saturate(_AmbientNormalStrength)));
+        }
 
         struct Attributes
         {
@@ -287,33 +443,19 @@ Shader "Water25D/Top Surface"
         half4 Frag(Varyings input) : SV_Target
         {
             float2 localXZ = input.uv * _WaterSize.xy;
-            half contactFoam = EvaluateContactFoam(localXZ);
-            half edgeDistance = min(min(input.uv.x, 1.0 - input.uv.x), min(input.uv.y, 1.0 - input.uv.y));
-            half edgeFoam = 1.0 - smoothstep(0.0, 0.035, edgeDistance);
-            half4 color = _BaseColor;
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, edgeFoam * _FoamColor.a);
-            color.a = saturate(lerp(color.a, 1.0, edgeFoam * 0.35));
-            if (_ReflectionFallback > 0.5)
-            {
-                half fallback = saturate(0.32 + input.uv.y * 0.48);
-                half reflectionAmount = saturate(_ReflectionStrength) * (1.0 - contactFoam * saturate(_FoamReflectionOcclusion));
-                color.rgb = lerp(color.rgb, _FoamColor.rgb, fallback * reflectionAmount * 0.35);
-            }
-            if (_ReflectionEnabled > 0.5)
-            {
-                float4 reflectionClip = mul(_ReflectionViewProjection, float4(input.worldPos, 1.0));
-                float2 reflectionUV = reflectionClip.xy / max(reflectionClip.w, 0.0001) * 0.5 + 0.5;
-                reflectionUV.y = 1.0 - reflectionUV.y;
-                half4 reflection = SAMPLE_TEXTURE2D(_ReflectionTexture, sampler_ReflectionTexture, reflectionUV);
-                half reflectionAmount = saturate(_ReflectionStrength) *
-                    (1.0 - contactFoam * saturate(_FoamReflectionOcclusion));
-                color.rgb = lerp(color.rgb, reflection.rgb, reflectionAmount * reflection.a);
-            }
+            float depth01 = Water25DDepthGradient(1.0 - input.uv.y, _TopDepthPower);
+            float3 surfaceRGB = lerp(_ShallowColor.rgb, _DeepColor.rgb, depth01);
+            surfaceRGB = Water25DPosterizeColor(surfaceRGB, _ColorBandSteps, _ColorBandInfluence);
 
+            float3 normalWS = EvaluateStylizedSurfaceNormal(localXZ);
+            float3 viewDirectionWS = Water25DSafeNormal(_WorldSpaceCameraPos - input.worldPos);
+            float2 interactionOffset = normalWS.xz * _AmbientReflectionDistortion;
+            half contactFoam = EvaluateContactFoam(localXZ);
+            half ringHighlight = 0.0;
+            float2 ringNormalXZ = 0.0;
             if (_SurfaceMode > 0.5 && _WaterRingCount > 0.5)
             {
                 int ringCount = min((int)_WaterRingCount, WATER_MAX_RINGS);
-                half ringHighlight = 0.0;
                 for (int ringIndex = 0; ringIndex < WATER_MAX_RINGS; ringIndex++)
                 {
                     if (ringIndex >= ringCount)
@@ -347,19 +489,96 @@ Shader "Water25D/Top Surface"
 
                     float fade = (1.0 - age01) * saturate(ringA.w);
                     ringHighlight = saturate(ringHighlight + annulus * fade);
+                    ringNormalXZ += Water25DSafeDirection(ringOffset) * annulus * fade;
                 }
-
-                color.rgb = lerp(color.rgb, _FoamColor.rgb, ringHighlight * 0.55);
-                color.a = saturate(color.a + ringHighlight * 0.12);
             }
 
             half wake = EvaluateWakeCapsules(localXZ);
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, wake * 0.38);
-            color.a = saturate(color.a + wake * 0.08);
+            float2 wakeDetail = float2(
+                sin(localXZ.x * 1.7 + _Time.y * 0.15),
+                cos(localXZ.y * 1.3 - _Time.y * 0.12)) * wake;
+            normalWS = Water25DAddSurfaceSlope(normalWS, ringNormalXZ, _RingNormalStrength);
+            normalWS = Water25DAddSurfaceSlope(normalWS, wakeDetail, _WakeNormalStrength);
+            interactionOffset += ringNormalXZ * _RingReflectionDistortion + wakeDetail * _WakeReflectionDistortion;
 
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, contactFoam * 0.75);
-            color.a = saturate(color.a + contactFoam * 0.18);
-            return color;
+            float boundaryFoam = Water25DBoundaryFoam(
+                input.uv,
+                _BoundaryFoamWidth,
+                _BoundaryFoamSoftness,
+                _BoundaryFoamBreakup,
+                _Time.y);
+            float foamAmount = saturate(
+                boundaryFoam * _BoundaryFoamIntensity +
+                ringHighlight * 0.55 +
+                wake * 0.38 +
+                contactFoam * 0.75);
+            surfaceRGB = lerp(surfaceRGB, _FoamColor.rgb, foamAmount);
+
+            float fresnel = Water25DFresnel(
+                normalWS,
+                viewDirectionWS,
+                _FresnelStrength,
+                _FresnelPower);
+            surfaceRGB = lerp(surfaceRGB, _FresnelTint.rgb, fresnel);
+
+            float reflectionOcclusion = 1.0 - contactFoam * saturate(_FoamReflectionOcclusion);
+            if (_ReflectionFallback > 0.5)
+            {
+                float reflectionGradient = saturate(1.0 - input.uv.y);
+                float3 stylizedReflection = lerp(
+                    _StylizedReflectionHorizonColor.rgb,
+                    _StylizedReflectionTopColor.rgb,
+                    reflectionGradient) * _StylizedReflectionTint.rgb;
+                float stylizedAmount = saturate(_StylizedReflectionStrength) * fresnel * reflectionOcclusion;
+                surfaceRGB = lerp(surfaceRGB, stylizedReflection, stylizedAmount);
+            }
+
+            if (_ReflectionEnabled > 0.5)
+            {
+                float2 reflectionUV;
+                float reflectionValid;
+                Water25DProjectReflectionUV(
+                    input.worldPos + float3(interactionOffset.x, 0.0, interactionOffset.y),
+                    _ReflectionViewProjection,
+                    reflectionUV,
+                    reflectionValid);
+                half4 reflection = SAMPLE_TEXTURE2D(
+                    _ReflectionTexture,
+                    sampler_ReflectionTexture,
+                    reflectionUV);
+                float planarAmount = saturate(_ReflectionStrength * _PlanarReflectionStrength) *
+                    fresnel * reflectionOcclusion * reflectionValid * reflection.a;
+                surfaceRGB = lerp(surfaceRGB, reflection.rgb * _PlanarReflectionTint.rgb, planarAmount);
+            }
+
+            if (_StylizedHighlightsEnabled > 0.5)
+            {
+                float highlight = Water25DStylizedHighlight(
+                    normalWS,
+                    viewDirectionWS,
+                    _HighlightDirection.xyz,
+                    _HighlightThreshold,
+                    _HighlightSoftness,
+                    _HighlightBreakup,
+                    localXZ,
+                    _Time.y);
+                surfaceRGB += _HighlightColor.rgb * highlight * _HighlightStrength;
+            }
+
+            if (_RefractionEnabled > 0.5 && _RefractionSourceAvailable > 0.5)
+            {
+                float2 screenUV = input.positionCS.xy / max(_ScaledScreenParams.xy, float2(1.0, 1.0));
+                screenUV += normalWS.xz * _RefractionStrength;
+                half4 sceneColor = SAMPLE_TEXTURE2D(
+                    _CameraOpaqueTexture,
+                    sampler_CameraOpaqueTexture,
+                    Water25DClampScreenUV(screenUV));
+                surfaceRGB = lerp(surfaceRGB, sceneColor.rgb * _RefractionTint.rgb, 0.55);
+            }
+
+            half alpha = saturate(lerp(_ShallowColor.a, _DeepColor.a, depth01) * _TopOpacity);
+            alpha = saturate(alpha + boundaryFoam * 0.20 + ringHighlight * 0.12 + wake * 0.08 + contactFoam * 0.18);
+            return half4(saturate(surfaceRGB), alpha);
         }
         ENDHLSL
 

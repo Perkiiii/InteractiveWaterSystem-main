@@ -25,13 +25,17 @@ namespace Water25D.Rendering
             Camera reflectionCameraSource,
             WaterReflectionMode reflectionMode,
             LayerMask reflectionCullingMask,
+            LayerMask reflectionExclusionMask,
             float reflectionResolutionScale,
             int reflectionUpdateIntervalFrames,
             float reflectionStrength)
         {
             DisposeRegistration();
             _fallbackState = WaterReflectionRenderState.ForMode(reflectionMode, reflectionStrength);
-            if (!Application.isPlaying || reflectionMode == WaterReflectionMode.Disabled || topRenderer == null || reflectionAnchor == null)
+            if (!Application.isPlaying ||
+                reflectionMode != WaterReflectionMode.Planar ||
+                topRenderer == null ||
+                reflectionAnchor == null)
             {
                 return;
             }
@@ -44,7 +48,8 @@ namespace Water25D.Rendering
                 reflectionCullingMask,
                 reflectionResolutionScale,
                 reflectionUpdateIntervalFrames,
-                reflectionStrength);
+                reflectionStrength,
+                reflectionExclusionMask);
         }
 
         public void Dispose()

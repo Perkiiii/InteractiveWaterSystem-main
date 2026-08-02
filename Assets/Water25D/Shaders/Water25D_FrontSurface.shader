@@ -5,6 +5,38 @@ Shader "Water25D/Front Surface"
         _FrontSurfaceColor("Surface Color", Color) = (0.08, 0.38, 0.52, 0.84)
         _FrontDeepColor("Deep Color", Color) = (0.025, 0.1, 0.18, 0.94)
         _FoamColor("Foam Color", Color) = (0.78, 0.95, 1, 0.8)
+        _TopDepthPower("Top Depth Power", Float) = 0.9
+        _FrontOpacity("Front Opacity", Range(0, 1)) = 0.9
+        _FrontDepthPower("Front Depth Power", Float) = 1.15
+        _WaterlineBandWidth("Waterline Band Width", Range(0.001, 0.5)) = 0.07
+        _SurfaceNormalTexture("Surface Normal Texture", 2D) = "bump" {}
+        _SurfaceDetailTexture("Surface Detail Texture", 2D) = "gray" {}
+        _NormalLayer1Scale("Normal Layer 1 Scale", Vector) = (0.55, 0.45, 0, 0)
+        _NormalLayer1Speed("Normal Layer 1 Speed", Vector) = (0.035, -0.021, 0, 0)
+        _NormalLayer1Strength("Normal Layer 1 Strength", Float) = 0.65
+        _NormalLayer2Scale("Normal Layer 2 Scale", Vector) = (1.15, 0.9, 0, 0)
+        _NormalLayer2Speed("Normal Layer 2 Speed", Vector) = (-0.017, 0.029, 0, 0)
+        _NormalLayer2Strength("Normal Layer 2 Strength", Float) = 0.25
+        _AmbientNormalStrength("Ambient Normal Strength", Range(0, 1)) = 0.1
+        _FresnelTint("Fresnel Tint", Color) = (0.75, 0.95, 1, 1)
+        _FresnelStrength("Fresnel Strength", Range(0, 1)) = 0.3
+        _FresnelPower("Fresnel Power", Float) = 4
+        _BoundaryFoamWidth("Boundary Foam Width", Range(0.0001, 0.5)) = 0.025
+        _BoundaryFoamSoftness("Boundary Foam Softness", Range(0, 0.5)) = 0.04
+        _BoundaryFoamBreakup("Boundary Foam Breakup", Range(0, 1)) = 0.25
+        _BoundaryFoamIntensity("Boundary Foam Intensity", Range(0, 1)) = 0.45
+        _FrontDistortionSourceAvailable("Front Distortion Source Available", Float) = 0
+        _FrontDistortionTint("Front Distortion Tint", Color) = (0.8, 0.95, 1, 1)
+        _FrontDistortionStrength("Front Distortion Strength", Range(0, 0.01)) = 0.003
+        _CausticTexture("Caustic Texture", 2D) = "black" {}
+        _CausticTextureValid("Caustic Texture Valid", Float) = 0
+        _CausticScale("Caustic Scale", Vector) = (0.16, 0.16, 0, 0)
+        _CausticSpeed("Caustic Speed", Vector) = (0.018, -0.012, 0, 0)
+        _CausticTint("Caustic Tint", Color) = (0.78, 1, 0.82, 1)
+        _CausticIntensity("Caustic Intensity", Range(0, 1)) = 0.2
+        _CausticDepthFade("Caustic Depth Fade", Range(0, 1)) = 0.7
+        _StylizedHighlightsEnabled("Stylized Highlights Enabled", Float) = 1
+        _CausticsEnabled("Caustics Enabled", Float) = 0
         _FrontDepth("Front Depth", Float) = 10
         _SurfaceMode("Surface Mode", Float) = 0
         _WaterSize("Water Size", Vector) = (20, 6.5, 0, 0)
@@ -43,6 +75,7 @@ Shader "Water25D/Front Surface"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Assets/Water25D/Shaders/Water25D_AmbientWaves.hlsl"
+        #include "Assets/Water25D/Shaders/Water25D_StylizedSurface.hlsl"
 
         #define WATER_MAX_RINGS 16
         #define WATER_MAX_CONTACT_FOAMS 8
@@ -54,11 +87,50 @@ Shader "Water25D/Front Surface"
         SAMPLER(sampler_FoamMaskAtlas);
         TEXTURE2D(_WakeMaskAtlas);
         SAMPLER(sampler_WakeMaskAtlas);
+        TEXTURE2D(_SurfaceNormalTexture);
+        SAMPLER(sampler_SurfaceNormalTexture);
+        TEXTURE2D(_SurfaceDetailTexture);
+        SAMPLER(sampler_SurfaceDetailTexture);
+        TEXTURE2D(_CausticTexture);
+        SAMPLER(sampler_CausticTexture);
+        TEXTURE2D(_CameraSortingLayerTexture);
+        SAMPLER(sampler_CameraSortingLayerTexture);
 
         CBUFFER_START(UnityPerMaterial)
             half4 _FrontSurfaceColor;
             half4 _FrontDeepColor;
             half4 _FoamColor;
+            float _FrontDepthPower;
+            float _FrontOpacity;
+            float _WaterlineBandWidth;
+            float _SurfaceNormalTextureValid;
+            float _SurfaceDetailTextureValid;
+            float _SecondaryAmbientDetailEnabled;
+            float4 _NormalLayer1Scale;
+            float4 _NormalLayer1Speed;
+            float _NormalLayer1Strength;
+            float4 _NormalLayer2Scale;
+            float4 _NormalLayer2Speed;
+            float _NormalLayer2Strength;
+            float _AmbientNormalStrength;
+            float4 _FresnelTint;
+            float _FresnelStrength;
+            float _FresnelPower;
+            float _BoundaryFoamWidth;
+            float _BoundaryFoamSoftness;
+            float _BoundaryFoamBreakup;
+            float _BoundaryFoamIntensity;
+            float _FrontDistortionSourceAvailable;
+            float4 _FrontDistortionTint;
+            float _FrontDistortionStrength;
+            float4 _CausticScale;
+            float4 _CausticSpeed;
+            float4 _CausticTint;
+            float _CausticTextureValid;
+            float _CausticIntensity;
+            float _CausticDepthFade;
+            float _StylizedHighlightsEnabled;
+            float _CausticsEnabled;
             float _FrontDepth;
             float _SurfaceMode;
             float4 _WaterSize;
@@ -103,6 +175,35 @@ Shader "Water25D/Front Surface"
 
         #include "Assets/Water25D/Shaders/Water25D_InteractionMasks.hlsl"
 
+        float3 EvaluateFrontStylizedNormal(float2 localXZ)
+        {
+            float noise = Water25DSurfaceNoise(localXZ * 0.42, _Time.y);
+            float3 normalWS = Water25DSafeNormal(float3(
+                (noise - 0.5) * 0.22,
+                (noise - 0.5) * 0.10,
+                1.0));
+            if (_SurfaceNormalTextureValid > 0.5)
+            {
+                float2 normalUV = frac(localXZ * _NormalLayer1Scale.xy + _Time.y * _NormalLayer1Speed.xy);
+                float2 encoded = SAMPLE_TEXTURE2D(
+                    _SurfaceNormalTexture,
+                    sampler_SurfaceNormalTexture,
+                    normalUV).xy * 2.0 - 1.0;
+                float3 sampledNormal = Water25DSafeNormal(float3(encoded.x, encoded.y * 0.5, 1.0));
+                normalWS = Water25DSafeNormal(lerp(normalWS, sampledNormal, saturate(_NormalLayer1Strength)));
+            }
+            if (_SecondaryAmbientDetailEnabled > 0.5 && _SurfaceDetailTextureValid > 0.5)
+            {
+                float2 detailUV = frac(localXZ * _NormalLayer2Scale.xy + _Time.y * _NormalLayer2Speed.xy);
+                float detail = SAMPLE_TEXTURE2D(
+                    _SurfaceDetailTexture,
+                    sampler_SurfaceDetailTexture,
+                    detailUV).r * 2.0 - 1.0;
+                normalWS = Water25DSafeNormal(normalWS + float3(detail, detail * 0.5, 0.0) * _NormalLayer2Strength * 0.08);
+            }
+            return Water25DSafeNormal(lerp(float3(0.0, 0.0, 1.0), normalWS, saturate(_AmbientNormalStrength)));
+        }
+
         struct Attributes
         {
             float4 positionOS : POSITION;
@@ -114,6 +215,7 @@ Shader "Water25D/Front Surface"
         {
             float4 positionCS : SV_POSITION;
             float2 uv : TEXCOORD0;
+            float3 worldPos : TEXCOORD1;
             UNITY_VERTEX_OUTPUT_STEREO
         };
 
@@ -259,28 +361,29 @@ Shader "Water25D/Front Surface"
 
             output.positionCS = GetVertexPositionInputs(positionOS).positionCS;
             output.uv = input.uv;
+            output.worldPos = TransformObjectToWorld(positionOS);
             return output;
         }
 
         half4 Frag(Varyings input) : SV_Target
         {
-            half depth = saturate(1.0 - input.uv.y);
-            half4 color = lerp(_FrontSurfaceColor, _FrontDeepColor, depth);
-            half surfaceFoam = (1.0 - smoothstep(0.0, 0.08, depth)) * _FoamColor.a;
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, surfaceFoam * 0.45);
+            float depth = Water25DDepthGradient(1.0 - input.uv.y, _FrontDepthPower);
+            float2 localXZ = float2(input.uv.x * _WaterSize.x, depth * _FrontDepth);
+            float3 normalWS = EvaluateFrontStylizedNormal(localXZ);
+            float3 viewDirectionWS = Water25DSafeNormal(_WorldSpaceCameraPos - input.worldPos);
+            float3 surfaceRGB = lerp(_FrontSurfaceColor.rgb, _FrontDeepColor.rgb, depth);
+            float waterlineFoam = 1.0 - smoothstep(0.0, max(0.001, _WaterlineBandWidth), depth);
 
             float contactFoam = EvaluateFrontContactFoam(input.uv.x * _WaterSize.x);
-            half contactSeam = contactFoam * (1.0 - smoothstep(0.0, 0.10, depth));
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, contactSeam * 0.75);
-            color.a = saturate(color.a + contactSeam * 0.14);
+            float contactSeam = contactFoam * waterlineFoam;
+            float ringHighlight = 0.0;
 
             if (_SurfaceMode > 0.5 && _WaterRingCount > 0.5)
             {
                 float localX = input.uv.x * _WaterSize.x;
-                float2 localXZ = float2(localX, 0.0);
+                float2 ringLocalXZ = float2(localX, 0.0);
                 int ringCount = min((int)_WaterRingCount, WATER_MAX_RINGS);
-                half ringHighlight = 0.0;
-                half seamBand = 1.0 - smoothstep(0.0, 0.10, depth);
+                float seamBand = waterlineFoam;
                 for (int ringIndex = 0; ringIndex < WATER_MAX_RINGS; ringIndex++)
                 {
                     if (ringIndex >= ringCount)
@@ -295,7 +398,7 @@ Shader "Water25D/Front Surface"
                     float radius = lerp(ringB.x, ringB.y, age01);
                     float thickness = max(0.0001, ringB.z);
                     float softness = max(0.0001, ringB.w);
-                    float2 ringOffset = localXZ - ringA.xy;
+                    float2 ringOffset = ringLocalXZ - ringA.xy;
                     float ringBounds = radius + thickness + softness;
                     if (length(ringOffset) > ringBounds)
                     {
@@ -304,7 +407,7 @@ Shader "Water25D/Front Surface"
 
                     float distanceToFrontPlane = abs(ringA.y);
                     float reachesFront = smoothstep(0.0, thickness + softness, radius - distanceToFrontPlane);
-                    float distanceFromRing = abs(distance(localXZ, ringA.xy) - radius);
+                    float distanceFromRing = abs(distance(ringLocalXZ, ringA.xy) - radius);
                     float annulus = 1.0 - smoothstep(thickness, thickness + softness, distanceFromRing);
                     if (_PainterlyMasksEnabled > 0.5 && _RingMaskAtlasValid > 0.5 && _RingMaskInfluence > 0.0 && annulus > 0.0)
                     {
@@ -319,15 +422,56 @@ Shader "Water25D/Front Surface"
                 }
 
                 ringHighlight *= seamBand;
-                color.rgb = lerp(color.rgb, _FoamColor.rgb, ringHighlight * 0.55);
-                color.a = saturate(color.a + ringHighlight * 0.10);
             }
 
             float wake = EvaluateFrontWake(input.uv.x * _WaterSize.x);
-            half wakeSeam = wake * (1.0 - smoothstep(0.0, 0.10, depth));
-            color.rgb = lerp(color.rgb, _FoamColor.rgb, wakeSeam * 0.38);
-            color.a = saturate(color.a + wakeSeam * 0.08);
-            return color;
+            float wakeSeam = wake * waterlineFoam;
+            float boundaryFoam = Water25DBoundaryFoam(
+                float2(input.uv.x, 1.0 - input.uv.y),
+                _BoundaryFoamWidth,
+                _BoundaryFoamSoftness,
+                _BoundaryFoamBreakup,
+                _Time.y);
+            float foamAmount = saturate(
+                waterlineFoam * _FoamColor.a * 0.45 +
+                contactSeam * 0.75 +
+                ringHighlight * 0.55 +
+                wakeSeam * 0.38 +
+                boundaryFoam * _BoundaryFoamIntensity);
+            surfaceRGB = lerp(surfaceRGB, _FoamColor.rgb, foamAmount);
+
+            float fresnel = Water25DFresnel(
+                normalWS,
+                viewDirectionWS,
+                _FresnelStrength,
+                _FresnelPower);
+            surfaceRGB = lerp(surfaceRGB, _FresnelTint.rgb, fresnel * 0.65);
+
+            if (_CausticsEnabled > 0.5 && _CausticTextureValid > 0.5)
+            {
+                float2 causticUV = frac(localXZ * _CausticScale.xy + _Time.y * _CausticSpeed.xy);
+                float caustic = SAMPLE_TEXTURE2D(
+                    _CausticTexture,
+                    sampler_CausticTexture,
+                    causticUV).r;
+                float causticFade = pow(saturate(1.0 - depth), max(0.05, _CausticDepthFade));
+                surfaceRGB += _CausticTint.rgb * caustic * _CausticIntensity * causticFade;
+            }
+
+            if (_FrontDistortionSourceAvailable > 0.5)
+            {
+                float2 screenUV = input.positionCS.xy / max(_ScaledScreenParams.xy, float2(1.0, 1.0));
+                screenUV += normalWS.xy * _FrontDistortionStrength;
+                half4 sceneColor = SAMPLE_TEXTURE2D(
+                    _CameraSortingLayerTexture,
+                    sampler_CameraSortingLayerTexture,
+                    Water25DClampScreenUV(screenUV));
+                surfaceRGB = lerp(surfaceRGB, sceneColor.rgb * _FrontDistortionTint.rgb, 0.35);
+            }
+
+            half alpha = saturate(lerp(_FrontSurfaceColor.a, _FrontDeepColor.a, depth) * _FrontOpacity);
+            alpha = saturate(alpha + contactSeam * 0.14 + ringHighlight * 0.10 + wakeSeam * 0.08);
+            return half4(saturate(surfaceRGB), alpha);
         }
         ENDHLSL
 

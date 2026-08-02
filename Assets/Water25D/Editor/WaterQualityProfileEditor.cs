@@ -86,6 +86,17 @@ namespace Water25D.Editor
             });
         }
 
+        public static bool DrawPresentationFields(SerializedObject serializedObject)
+        {
+            return DrawProperties(serializedObject, "Edit Water25D Presentation Quality", delegate
+            {
+                Property(serializedObject, "_enableSecondaryAmbientDetail", "Secondary Ambient Detail", "Keep the restrained second normal/detail layer enabled when its optional input is available.");
+                Property(serializedObject, "_enableStylizedHighlights", "Stylized Highlights", "Enable the deterministic broad highlight response without adding geometry or lights.");
+                Property(serializedObject, "_enableRefraction", "Optional Refraction", "Enable only when the style profile confirms that a valid opaque texture source is configured.");
+                Property(serializedObject, "_enableCaustics", "Optional Caustics", "Enable only when the style profile has an assigned caustic texture.");
+            });
+        }
+
         public static bool DrawAmbientBandField(SerializedObject serializedObject)
         {
             return DrawProperties(serializedObject, "Edit Water25D Ambient Wave Bands", delegate
@@ -148,6 +159,7 @@ namespace Water25D.Editor
             DrawStandaloneSection(serializedObject, "Contact Foam", false, DrawContactFoamFields);
             DrawStandaloneSection(serializedObject, "Wake Capacity", false, DrawWakeFields);
             DrawStandaloneSection(serializedObject, "Painterly Interaction", false, DrawPainterlyFields);
+            DrawStandaloneSection(serializedObject, "Phase 3 Presentation", false, DrawPresentationFields);
             DrawValidation(serializedObject, profile);
 
             EditorGUILayout.BeginVertical(Water25DInspectorStyles.SectionCard);

@@ -168,6 +168,18 @@ namespace Water25D
             _styleSettings.Apply(block);
             _styleSettings.ApplyPainterlyMaskSettings(block, _qualitySettings);
             block.SetFloat(WaterShaderIds.WaveBands, _qualitySettings.AmbientWaveBands);
+            block.SetFloat(
+                WaterShaderIds.SecondaryAmbientDetailEnabled,
+                _qualitySettings.EnableSecondaryAmbientDetail ? 1f : 0f);
+            block.SetFloat(
+                WaterShaderIds.StylizedHighlightsEnabled,
+                _qualitySettings.EnableStylizedHighlights ? 1f : 0f);
+            block.SetFloat(
+                WaterShaderIds.RefractionEnabled,
+                _qualitySettings.EnableRefraction && _styleSettings.RefractionSourceAvailable ? 1f : 0f);
+            block.SetFloat(
+                WaterShaderIds.CausticsEnabled,
+                _qualitySettings.EnableCaustics && _styleSettings.CausticTexture != null ? 1f : 0f);
             block.SetVector(WaterShaderIds.WaterSize, new Vector4(_topSurfaceSize.x, _topSurfaceSize.y, 0f, 0f));
             block.SetFloat(WaterShaderIds.WaterMeshDepth, _topSurfaceSize.y);
             block.SetFloat(WaterShaderIds.FrontDepth, _frontSurfaceDepth);

@@ -265,9 +265,9 @@ Exact Phase 2 files changed or created:
 
 Reference assets and portability:
 
-- Inspected `Assets/ReferenceOnly/README.md`; the referenced Ameye/Minions assets are not present in this checkout. No reference material, graph, subgraph, HLSL, texture, shader, or code was copied, adapted, or recreated from that directory.
-- No attribution or licence document was added for reference assets. Existing `THIRD_PARTY_NOTICES.md` and the reference-only README remain the applicable records.
-- `rg -n "Assets/ReferenceOnly" Assets/Water25D` returned no package dependency. The broader `Cainos|InteractiveWaterSystem|DemoScenes|Lucid` scan returned only existing documentation/audit text, with no runtime or editor dependency.
+- The authorized local Ameye/Minions reference trees under `Assets/ReferenceOnly/` were inspected for the Phase 3 audit. No reference graph, subgraph, HLSL, texture, shader, material, script, or renderer asset was copied into Water25D.
+- The adaptation and rejection matrix is recorded in `Assets/Water25D/Documentation/Design/PHASE3_REFERENCE_ADAPTATION.md`. Existing `THIRD_PARTY_NOTICES.md` remains unchanged; no source licence terms were inferred.
+- `rg -n "Assets/ReferenceOnly" Assets/Water25D` returns only the intentional documentation audit. The broader `Cainos|InteractiveWaterSystem|DemoScenes|Lucid` scan returns documentation-only portability/audit matches, with no runtime or editor dependency.
 
 Phase 2 validation through the connected Unity MCP:
 
@@ -279,7 +279,40 @@ Phase 2 validation through the connected Unity MCP:
 - Frame Debugger was enabled and queried through MCP in the idle non-playing editor; it reported 0 events. This is not a PlayMode draw-call comparison. A live visual Frame Debugger capture remains manual work.
 - `git diff --check` passed. `git status --short` contains only the listed Water25D source, shader, editor, test, new-asset `.meta`, and documentation changes; the sample scene and solution ordering changes created by Unity test setup were restored to their exact HEAD content.
 
-No scene was intentionally saved or modified by Phase 2. Unity's PlayMode test harness transiently serialized the open visual-only sample during its temporary setup; that incidental diff was detected and restored before the final audit. No Phase 3 stylized-water/reflection stack, interaction camera, new CRT work, Fresnel, refraction, caustics, light shafts, splash artwork, migration tooling, compute backend, or target-device validation was included.
+The preceding Phase 2 note records that no scene was intentionally saved or modified during that slice. The current Phase 3 work below also leaves the visual sample unsaved; its temporary screenshots and PlayMode-only reflection changes were removed or discarded.
+
+## Current Phase 3 bounded presentation slice — 2026-08-02
+
+Starting state was branch `main`, commit `3f8461e84c942a3cbf26fb6b54881c9897a508bf`, with a clean working tree. The connected Unity Editor was `6000.5.4f1`; the read-only active validation scene was `Assets/Water25D/Samples/Water25D_VisualFlat.unity` with 10 roots and `isDirty=False`.
+
+Implemented:
+
+- Added the package-owned Phase 3 reference audit and adaptation record. The implementation is independent HLSL/profile/shader code; no reference-only asset is serialized by Water25D.
+- Added shared `Water25D_StylizedSurface.hlsl` helpers for safe normals, deterministic procedural detail/noise, shallow/deep depth gradients, restrained colour banding, Fresnel, broad stylized highlights, reflection projection validity, boundary foam, and screen-UV clamping.
+- Extended `WaterStyleProfile` with shallow/deep top colours, depth shaping, calm two-layer normal/detail inputs, Fresnel/highlight controls, camera-free and planar reflection presentation, boundary foam, optional refraction/front distortion source flags, optional caustics, and safe legacy-profile sanitization. Null optional textures are omitted from MPB writes rather than bound.
+- Extended `WaterQualityProfile` with independent secondary-detail, stylized-highlight, refraction, and caustic toggles. Optional source features remain disabled unless both the quality toggle and the style source contract are valid.
+- Reworked the package top/front fragment presentation while preserving the simulated branch and FlatStylized four-vertex/no-displacement contract. Top and front share profile colours, normals, Fresnel, foam, and fixed-capacity ring/foam/wake interaction data; refraction, front sorting-layer distortion, and caustics are conditional and source-gated.
+- Kept reflection modes explicit: Disabled has no reflection blend, Stylized uses the analytic camera-free fallback and registers no manager/camera/texture, and Planar uses the grouped manager. Planar groups now include explicit exclusion masks, use source-camera frustum visibility, invalidate on projection changes, and apply an oblique water-plane clip.
+- Added the `Reflection Exclusion Mask` controller field and Inspector guidance, Phase 3 style/quality Inspector sections, optional-input help, and new flat-stylized default assets `Water25D_FlatStylizedStyle.asset` and `Water25D_FlatMediumQuality.asset`. New controller defaults choose these assets when available; existing serialized controllers keep their current profiles.
+- Added four Phase 3 EditMode contract tests covering calm/source-gated defaults, presentation-vs-simulation quality identity, shader properties, and reflection exclusion-key separation.
+
+Validation performed:
+
+- Unity refresh/compile completed with no Water25D C# compiler errors. Top and front materials reported supported shaders in the connected Editor.
+- Full EditMode job `5160c957348843639de4b679eca75b95`: 84 total, 84 passed, 0 failed, 0 skipped.
+- Full PlayMode job `b39fcc7774954327beda0f49b89a598e`: 13 total, 13 passed, 0 failed, 0 skipped.
+- Focused post-hardening EditMode job `920ff05ecd59425e91851d0dba06e879`: 5 total, 5 passed, 0 failed, 0 skipped.
+- Live PlayMode visual capture from the sample displayed the flat water presentation without Water25D errors. After an in-memory switch of `Water25D_FlatTest` to Planar with `Main Camera`, the query reported one reflection manager, one registration, one compatible group, enabled reflection, and a non-null reflection texture. The scene was then stopped without saving.
+- Live Frame Debugger was enabled only after pausing and capturing a frame; it reported 27 events, including the `WaterTopMesh | WaterFrontMesh` renderer pass. It was disabled afterward.
+- Live Profiler captured this Editor/sample frame only: approximately 4.69 ms CPU frame time and 1.53 ms GPU frame time from FrameTiming, with a later Render counter sample of 29 SRP-batcher draws, 11 standard draws, 17,649 triangles, 1.33 ms main-thread, 1.03 ms render-thread, and 1.05 ms GPU frame time. These are observations, not target-device benchmarks.
+- Final active scene inspection reported `isDirty=False`, 10 roots, and no package Console errors. The remaining Console warning was the MCP transport's `WebSocket is not initialised` warning, not a Water25D diagnostic.
+- `git diff --check` and the package dependency scans were run. No project settings, sample scene, legacy/vendor content, or reference source files belong to this slice.
+
+Not performed or still required:
+
+- Clean compatible-project copy/import validation, prefab-stage and multi-selection Inspector review, target-device profiling, measured benchmark capture, and full visual parity comparison against the legacy baseline.
+- Manual validation with actual optional normal/detail/opaque/sorting-layer/caustic textures. Missing-input fallback and source-gated contracts were validated; project renderer setup remains documented rather than automatic.
+- Target-device steady-state allocation and reflection-cost claims. The implementation preserves the bounded/no-extra-camera architecture, but performance goals remain unmeasured targets.
 
 Remaining manual visual work:
 
@@ -294,7 +327,7 @@ Remaining manual visual work:
 - `Water25DEditModeFixture` now creates test roots in a dedicated preview scene before adding components, tracks generated Unity objects and temporary assets, cleans them with `DestroyImmediate`, removes only newly-created test assets, restores reflection-manager ownership, and closes the preview scene even when cleanup encounters an error. The menu authoring path has a preview-scene-aware overload so its controller is also added after scene isolation.
 - Unity inspection found exactly one serialized `Water25D Editor Test` root in `Assets/Water25D/Samples/Water25D_VisualFlat.unity`. Only that verified test fixture and its generated children were removed; the one deliberate scene save produced only the corresponding 606-line deletion, with no unrelated serialized changes.
 - Focused fixture/ownership tests passed 8/8 in job `e6c1246076894d8c9b2fbe6f398b2984`. The final complete EditMode runs passed 80/80 in jobs `699ae009cb64474b9718f2e10f99be6c` and `231fc8ad31a54b64806eb29d7cfd76d1`; the final complete PlayMode run passed 13/13 in job `415780f3fa3c4790a71f98a8747b85a4`. After each final suite, the active scene remained `Water25D_VisualFlat`, with one loaded scene, 10 roots, zero exact-name roots, zero reflection managers/cameras/textures, zero ripple textures, and `isDirty=False`. The final Console audit returned zero error/warning entries.
-- This is a test-fixture lifecycle correction only. Phase 2 remains the active milestone; Phase 3 was not started.
+- This bullet describes the fixture-lifecycle correction at that earlier revision; the current milestone state is recorded in the Phase 3 entry and final section below.
 
 ## Package boundaries
 
@@ -393,10 +426,6 @@ Project-level rendering and sorting configuration is intentionally not modified 
 
 ## Milestone status
 
-The Phase 2 rendering-ownership and painterly-interaction code/test slice was implemented and validated, but the full milestone is not complete until the remaining manual visual, live Frame Debugger/Profiler, clean-project, and target-device checks are performed. The next bounded task is:
+Phase 3 — Stylized water and reflection presentation — is active and advanced by this bounded implementation slice. The package-owned presentation, profiles, reflection grouping hardening, Inspector workflow, reference audit, assets, tests, and connected-Editor checks are complete for the implemented scope. The milestone is not complete until the remaining manual optional-input, prefab/multi-selection, clean-project, measured benchmark, and target-device checks are performed.
 
-```text
-Phase 3 — Stylized water and reflection presentation
-```
-
-Full prefab-stage, multi-selection, clean-project portability, measured profiling, target-device validation, and the remaining flat presentation features remain follow-up work.
+Phase 4 work remains intentionally out of scope: no compute backend, new CRT, Gerstner displacement, interaction camera/global interaction RT, light shafts, or splash-art redesign was started.

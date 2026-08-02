@@ -1,0 +1,122 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d4d10898cdc0564388d3d6c7cd37e9c, type: 3}
+  m_Name: Water25D_FlatStylizedStyle
+  m_EditorClassIdentifier: Water25D.Runtime::Water25D.WaterStyleProfile
+  _serializedDataVersion: 1
+  _topColor: {r: 0.2, g: 0.48, b: 0.6, a: 0.92}
+  _shallowColor: {r: 0.2, g: 0.48, b: 0.6, a: 0.92}
+  _deepColor: {r: 0.04, g: 0.22, b: 0.36, a: 0.94}
+  _frontSurfaceColor: {r: 0.08, g: 0.38, b: 0.52, a: 0.84}
+  _frontDeepColor: {r: 0.025, g: 0.1, b: 0.18, a: 0.94}
+  _foamColor: {r: 0.78, g: 0.95, b: 1, a: 0.8}
+  _topDepthPower: 0.9
+  _topOpacity: 0.92
+  _colorBandSteps: 4
+  _colorBandInfluence: 0.15
+  _ambientWaveAmplitude: 0.06
+  _ambientWaveLength: 3.5
+  _ambientWaveSpeed: 0.8
+  _ambientWaveDirection: {x: 1, y: 0.15}
+  _surfaceNormalTexture: {fileID: 0}
+  _surfaceDetailTexture: {fileID: 0}
+  _normalLayer1Scale: {x: 0.55, y: 0.45}
+  _normalLayer1Speed: {x: 0.035, y: -0.021}
+  _normalLayer1Strength: 0.65
+  _normalLayer2Scale: {x: 1.15, y: 0.9}
+  _normalLayer2Speed: {x: -0.017, y: 0.029}
+  _normalLayer2Strength: 0.25
+  _ambientNormalStrength: 0.1
+  _fresnelTint: {r: 0.75, g: 0.95, b: 1, a: 1}
+  _fresnelStrength: 0.3
+  _fresnelPower: 4
+  _highlightColor: {r: 0.88, g: 0.98, b: 1, a: 1}
+  _highlightStrength: 0.18
+  _highlightThreshold: 0.65
+  _highlightSoftness: 0.2
+  _highlightBreakup: 0.25
+  _highlightDirection: {x: -0.3207135, y: 0.90868825, z: -0.26726124}
+  _stylizedReflectionTint: {r: 1, g: 1, b: 1, a: 1}
+  _stylizedReflectionHorizonColor: {r: 0.22, g: 0.52, b: 0.68, a: 1}
+  _stylizedReflectionTopColor: {r: 0.48, g: 0.78, b: 0.88, a: 1}
+  _stylizedReflectionStrength: 0.3
+  _planarReflectionTint: {r: 1, g: 1, b: 1, a: 1}
+  _planarReflectionStrength: 0.35
+  _ambientReflectionDistortion: 0.0025
+  _ringNormalStrength: 0.18
+  _ringReflectionDistortion: 0.008
+  _wakeNormalStrength: 0.12
+  _wakeReflectionDistortion: 0.006
+  _boundaryFoamWidth: 0.025
+  _boundaryFoamSoftness: 0.04
+  _boundaryFoamBreakup: 0.25
+  _boundaryFoamIntensity: 0.45
+  _refractionSourceAvailable: 0
+  _refractionTint: {r: 1, g: 1, b: 1, a: 1}
+  _refractionStrength: 0.003
+  _frontDistortionSourceAvailable: 0
+  _frontDistortionTint: {r: 0.8, g: 0.95, b: 1, a: 1}
+  _frontDistortionStrength: 0.003
+  _frontDepthPower: 1.15
+  _frontOpacity: 0.9
+  _waterlineBandWidth: 0.07
+  _causticTexture: {fileID: 0}
+  _causticScale: {x: 0.16, y: 0.16}
+  _causticSpeed: {x: 0.018, y: -0.012}
+  _causticTint: {r: 0.78, g: 1, b: 0.82, a: 1}
+  _causticIntensity: 0.2
+  _causticDepthFade: 0.7
+  _rippleAmplitude: 0.18
+  _ringLifetime: 1.25
+  _ringExpansionMultiplier: 6
+  _ringThickness: 0.05
+  _ringSoftness: 0.04
+  _ringIntensity: 0.75
+  _contactFoamWidthPadding: 0.08
+  _contactFoamHalfDepth: 0.16
+  _contactFoamSoftness: 0.06
+  _contactFoamIntensity: 0.85
+  _contactFoamFadeDuration: 0.35
+  _foamReflectionOcclusion: 0.85
+  _wakeEmissionSpacing: 0.75
+  _wakeMinimumLateralSpeed: 0.5
+  _wakeWidthMultiplier: 0.9
+  _wakeWidthPadding: 0.02
+  _wakeMinimumHalfWidth: 0.05
+  _wakeMaximumHalfWidth: 0.35
+  _wakeLifetime: 1.35
+  _wakeFadePower: 1.25
+  _wakeIntensity: 0.45
+  _wakeDirectionReversalAngle: 120
+  _ringMask:
+    Atlas: {fileID: 0}
+    Grid: {x: 1, y: 1}
+    VariantCount: 1
+    FrameCount: 1
+    Influence: 1
+    RotationVariation: 1
+  _contactFoamMask:
+    Atlas: {fileID: 0}
+    Grid: {x: 1, y: 1}
+    VariantCount: 1
+    FrameCount: 1
+    Influence: 1
+    RotationVariation: 1
+  _wakeMask:
+    Atlas: {fileID: 0}
+    Grid: {x: 1, y: 1}
+    VariantCount: 1
+    FrameCount: 1
+    Influence: 1
+    RotationVariation: 1
+  _topMaterialTemplate: {fileID: 2100000, guid: 7a535f86bf2ac5d4a8c6be20c105e27f, type: 2}
+  _frontMaterialTemplate: {fileID: 2100000, guid: ac0653dce44e03d4d93782767757ff01, type: 2}

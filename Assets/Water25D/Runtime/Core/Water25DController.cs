@@ -49,6 +49,8 @@ namespace Water25D
         [SerializeField] private WaterReflectionMode _reflectionMode = WaterReflectionMode.Stylized;
         [SerializeField] private Camera _reflectionCameraSource;
         [SerializeField] private LayerMask _reflectionCullingMask = ~0;
+        [Tooltip("Additional layers excluded from shared planar reflection renders. The water surface layer is always excluded automatically.")]
+        [SerializeField] private LayerMask _reflectionExclusionMask;
         [Range(0.1f, 1f)] [SerializeField] private float _reflectionResolutionScale = 0.25f;
         [Range(1, 120)] [SerializeField] private int _reflectionUpdateIntervalFrames = 3;
         [Range(0f, 1f)] [SerializeField] private float _reflectionStrength = 0.35f;
@@ -702,6 +704,7 @@ namespace Water25D
                 _reflectionCameraSource,
                 _reflectionMode,
                 _reflectionCullingMask,
+                _reflectionExclusionMask,
                 _reflectionResolutionScale,
                 _reflectionUpdateIntervalFrames,
                 _reflectionStrength);

@@ -23,6 +23,7 @@ namespace Water25D.Rendering
         public int NormalY;
         public int NormalZ;
         public int CullingMask;
+        public int ExclusionMask;
         public int Mode;
         public int ResolutionScale;
         public int UpdateIntervalFrames;
@@ -33,7 +34,8 @@ namespace Water25D.Rendering
             LayerMask cullingMask,
             WaterReflectionMode mode,
             float resolutionScale,
-            int updateIntervalFrames)
+            int updateIntervalFrames,
+            LayerMask exclusionMask = default(LayerMask))
         {
             var normal = plane != null ? plane.up.normalized : Vector3.up;
             var planeHeight = plane != null ? Vector3.Dot(normal, plane.position) : 0f;
@@ -45,6 +47,7 @@ namespace Water25D.Rendering
                 NormalY = Mathf.RoundToInt(normal.y * 1000f),
                 NormalZ = Mathf.RoundToInt(normal.z * 1000f),
                 CullingMask = cullingMask.value,
+                ExclusionMask = exclusionMask.value,
                 Mode = (int)mode,
                 ResolutionScale = Mathf.RoundToInt(Mathf.Clamp01(resolutionScale) * 100f),
                 UpdateIntervalFrames = Mathf.Clamp(updateIntervalFrames, 1, 120)
@@ -59,6 +62,7 @@ namespace Water25D.Rendering
                    NormalY == other.NormalY &&
                    NormalZ == other.NormalZ &&
                    CullingMask == other.CullingMask &&
+                   ExclusionMask == other.ExclusionMask &&
                    Mode == other.Mode &&
                    ResolutionScale == other.ResolutionScale &&
                    UpdateIntervalFrames == other.UpdateIntervalFrames;
@@ -79,6 +83,7 @@ namespace Water25D.Rendering
                 hash = hash * 31 + NormalY;
                 hash = hash * 31 + NormalZ;
                 hash = hash * 31 + CullingMask;
+                hash = hash * 31 + ExclusionMask;
                 hash = hash * 31 + Mode;
                 hash = hash * 31 + ResolutionScale;
                 return hash * 31 + UpdateIntervalFrames;

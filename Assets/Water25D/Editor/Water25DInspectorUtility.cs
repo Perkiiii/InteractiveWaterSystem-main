@@ -39,6 +39,8 @@ namespace Water25D.Editor
         internal const string ProfilesFolder = "Assets/Water25D/Profiles";
         internal const string StyleProfilePath = ProfilesFolder + "/Water25D_DefaultStyle.asset";
         internal const string QualityProfilePath = ProfilesFolder + "/Water25D_MediumQuality.asset";
+        internal const string FlatStylizedStyleProfilePath = ProfilesFolder + "/Water25D_FlatStylizedStyle.asset";
+        internal const string FlatStylizedQualityProfilePath = ProfilesFolder + "/Water25D_FlatMediumQuality.asset";
         internal const string TopMaterialPath = "Assets/Water25D/Materials/Water25D_Top.mat";
         internal const string FrontMaterialPath = "Assets/Water25D/Materials/Water25D_Front.mat";
         internal const string RippleMaterialPath = "Assets/Water25D/Materials/Water25D_RippleSimulation.mat";
@@ -64,12 +66,24 @@ namespace Water25D.Editor
 
         public static bool IsPackageDefaultStyle(WaterStyleProfile profile)
         {
-            return profile != null && AssetDatabase.GetAssetPath(profile) == StyleProfilePath;
+            if (profile == null)
+            {
+                return false;
+            }
+
+            var path = AssetDatabase.GetAssetPath(profile);
+            return path == StyleProfilePath || path == FlatStylizedStyleProfilePath;
         }
 
         public static bool IsPackageDefaultQuality(WaterQualityProfile profile)
         {
-            return profile != null && AssetDatabase.GetAssetPath(profile) == QualityProfilePath;
+            if (profile == null)
+            {
+                return false;
+            }
+
+            var path = AssetDatabase.GetAssetPath(profile);
+            return path == QualityProfilePath || path == FlatStylizedQualityProfilePath;
         }
 
         public static Water25DMaterialStatus GetMaterialStatus(Material material, string expectedShader)

@@ -18,6 +18,7 @@ namespace Water25D.Rendering
             internal Camera SourceCamera;
             internal WaterReflectionMode Mode;
             internal LayerMask CullingMask;
+            internal LayerMask ExclusionMask;
             internal float ResolutionScale;
             internal int UpdateIntervalFrames;
             internal float Strength;
@@ -31,6 +32,7 @@ namespace Water25D.Rendering
                 Camera sourceCamera,
                 WaterReflectionMode mode,
                 LayerMask cullingMask,
+                LayerMask exclusionMask,
                 float resolutionScale,
                 int updateIntervalFrames,
                 float strength)
@@ -41,6 +43,7 @@ namespace Water25D.Rendering
                 SourceCamera = sourceCamera;
                 Mode = mode;
                 CullingMask = cullingMask;
+                ExclusionMask = exclusionMask;
                 ResolutionScale = Mathf.Clamp(resolutionScale, 0.1f, 1f);
                 UpdateIntervalFrames = Mathf.Clamp(updateIntervalFrames, 1, 120);
                 Strength = Mathf.Clamp01(strength);
@@ -86,7 +89,8 @@ namespace Water25D.Rendering
                     CullingMask,
                     Mode,
                     ResolutionScale,
-                    UpdateIntervalFrames);
+                    UpdateIntervalFrames,
+                    ExclusionMask);
             }
         }
 
@@ -94,12 +98,21 @@ namespace Water25D.Rendering
         {
             private readonly List<ReflectionRegistration> _registrations = new List<ReflectionRegistration>(4);
             private readonly WaterReflectionGroupKey _key;
+            private readonly Plane[] _sourceFrustumPlanes = new Plane[6];
             private Camera _reflectionCamera;
             private RenderTexture _reflectionTexture;
             private Vector3 _lastCameraPosition;
             private Quaternion _lastCameraRotation;
             private int _lastRenderFrame = -1;
             private Matrix4x4 _viewProjection;
+            private Matrix4x4 _lastProjectionMatrix;
+            private int _lastPixelWidth;
+            private int _lastPixelHeight;
+            private float _lastAspect;
+            private float _lastFieldOfView;
+            private float _lastOrthographicSize;
+            private bool _lastOrthographic;
+            private bool _hasCameraProjection;
             private bool _hasRendered;
 
             public ReflectionGroup(WaterReflectionGroupKey key)
@@ -145,12 +158,14 @@ namespace Water25D.Rendering
                     return;
                 }
 
+                GeometryUtility.CalculateFrustumPlanes(sourceCamera, _sourceFrustumPlanes);
                 var visible = false;
-                var excludedLayers = 0;
+                var excludedLayers = _key.ExclusionMask;
                 for (var i = 0; i < _registrations.Count; i++)
                 {
                     var registration = _registrations[i];
-                    if (registration.SurfaceRenderer != null && registration.SurfaceRenderer.isVisible)
+                    if (registration.SurfaceRenderer != null &&
+                        GeometryUtility.TestPlanesAABB(_sourceFrustumPlanes, registration.SurfaceRenderer.bounds))
                     {
                         visible = true;
                     }
@@ -159,6 +174,8 @@ namespace Water25D.Rendering
                     {
                         excludedLayers |= 1 << registration.SurfaceRenderer.gameObject.layer;
                     }
+
+                    excludedLayers |= registration.ExclusionMask.value;
                 }
 
                 if (!visible)
@@ -169,7 +186,8 @@ namespace Water25D.Rendering
 
                 var cameraMoved = !_hasRendered ||
                                   (sourceCamera.transform.position - _lastCameraPosition).sqrMagnitude > 0.0001f ||
-                                  Quaternion.Angle(sourceCamera.transform.rotation, _lastCameraRotation) > 0.1f;
+                                  Quaternion.Angle(sourceCamera.transform.rotation, _lastCameraRotation) > 0.1f ||
+                                  CameraProjectionChanged(sourceCamera);
                 var intervalElapsed = !_hasRendered || frame - _lastRenderFrame >= _key.UpdateIntervalFrames;
                 if (cameraMoved || intervalElapsed)
                 {
@@ -216,6 +234,8 @@ namespace Water25D.Rendering
                 _reflectionCamera.transform.SetPositionAndRotation(
                     reflectedPosition,
                     Quaternion.LookRotation(reflectedForward, reflectedUp));
+                var clipPlane = CameraSpacePlane(_reflectionCamera, planePoint, normal, 1f);
+                _reflectionCamera.projectionMatrix = _reflectionCamera.CalculateObliqueMatrix(clipPlane);
                 _reflectionCamera.enabled = false;
 
                 var previousInvertCulling = GL.invertCulling;
@@ -232,8 +252,28 @@ namespace Water25D.Rendering
                 _viewProjection = GL.GetGPUProjectionMatrix(_reflectionCamera.projectionMatrix, true) * _reflectionCamera.worldToCameraMatrix;
                 _lastCameraPosition = sourceCamera.transform.position;
                 _lastCameraRotation = sourceCamera.transform.rotation;
+                _lastProjectionMatrix = sourceCamera.projectionMatrix;
+                _lastPixelWidth = sourceCamera.pixelWidth;
+                _lastPixelHeight = sourceCamera.pixelHeight;
+                _lastAspect = sourceCamera.aspect;
+                _lastFieldOfView = sourceCamera.fieldOfView;
+                _lastOrthographicSize = sourceCamera.orthographicSize;
+                _lastOrthographic = sourceCamera.orthographic;
+                _hasCameraProjection = true;
                 _lastRenderFrame = frame;
                 _hasRendered = true;
+            }
+
+            private bool CameraProjectionChanged(Camera sourceCamera)
+            {
+                return !_hasCameraProjection ||
+                       sourceCamera.pixelWidth != _lastPixelWidth ||
+                       sourceCamera.pixelHeight != _lastPixelHeight ||
+                       !Mathf.Approximately(sourceCamera.aspect, _lastAspect) ||
+                       !Mathf.Approximately(sourceCamera.fieldOfView, _lastFieldOfView) ||
+                       !Mathf.Approximately(sourceCamera.orthographicSize, _lastOrthographicSize) ||
+                       sourceCamera.orthographic != _lastOrthographic ||
+                       sourceCamera.projectionMatrix != _lastProjectionMatrix;
             }
 
             private void EnsureResources(Camera sourceCamera, int excludedLayers)
@@ -254,7 +294,8 @@ namespace Water25D.Rendering
                         autoGenerateMips = false
                     };
                     _reflectionTexture.Create();
-                    _hasRendered = false;
+                _hasRendered = false;
+                _hasCameraProjection = false;
                 }
 
                 if (_reflectionCamera == null)
@@ -275,6 +316,22 @@ namespace Water25D.Rendering
                 _reflectionCamera.targetTexture = _reflectionTexture;
                 _reflectionCamera.cullingMask = _key.CullingMask & ~excludedLayers;
                 _reflectionCamera.name = "Water25D Reflection Camera";
+            }
+
+            private static Vector4 CameraSpacePlane(
+                Camera camera,
+                Vector3 planePoint,
+                Vector3 planeNormal,
+                float sideSign)
+            {
+                var offsetPosition = planePoint + planeNormal * 0.05f;
+                var cameraSpacePosition = camera.worldToCameraMatrix.MultiplyPoint(offsetPosition);
+                var cameraSpaceNormal = camera.worldToCameraMatrix.MultiplyVector(planeNormal).normalized * sideSign;
+                return new Vector4(
+                    cameraSpaceNormal.x,
+                    cameraSpaceNormal.y,
+                    cameraSpaceNormal.z,
+                    -Vector3.Dot(cameraSpacePosition, cameraSpaceNormal));
             }
 
             private void ApplyToMembers(Texture texture, Matrix4x4 viewProjection, bool enabled, bool fallback)
@@ -329,7 +386,8 @@ namespace Water25D.Rendering
             LayerMask cullingMask,
             float resolutionScale,
             int updateIntervalFrames,
-            float strength)
+            float strength,
+            LayerMask exclusionMask = default(LayerMask))
         {
             if (surfaceRenderer == null || plane == null || mode == WaterReflectionMode.Disabled)
             {
@@ -344,6 +402,7 @@ namespace Water25D.Rendering
                 sourceCamera,
                 mode,
                 cullingMask,
+                exclusionMask,
                 resolutionScale,
                 updateIntervalFrames,
                 strength);
@@ -407,6 +466,10 @@ namespace Water25D.Rendering
 
             if (_registrations.Count == 0)
             {
+                if (_instance == this)
+                {
+                    _instance = null;
+                }
                 DestroyOwnedObject(gameObject);
             }
         }
