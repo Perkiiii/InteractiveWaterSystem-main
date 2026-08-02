@@ -25,11 +25,31 @@ Keep `Assets/Cainos/Third Party/Lucid Editor/License.txt` with any redistributio
 
 The original project documentation referenced `https://github.com/daothienphu/InteractiveWaterSystem` for the custom `InteractiveWater` and `SimplePlanarReflection` implementation. Confirm whether this repository is a fork or derivative, preserve any required attribution, and add an appropriate license before publishing the custom code.
 
-## Optional visual development references
+## Ameye Stylized Water Shader — authorized Phase 3 fork
 
-Ameye's Stylized Water Shader and Minions Art's Shader Graph Interactive Water are development references only. No explicit public source-redistribution permission was located in the files previously present under `Assets/ReferenceOnly/` or on the linked official tutorial pages. Those source assets are therefore not retained in the tracked repository. This is a record of the licence evidence found, not a legal conclusion.
+The project owner explicitly authorized the Water25D Phase 3 integration to copy,
+modify, and use the local source under:
 
-Developers who are entitled to access those assets may install them locally according to [`Assets/ReferenceOnly/README.md`](Assets/ReferenceOnly/README.md). Locally installed references are not part of Water25D, must not become package dependencies, and must not be included in exports or distributions.
+- `Assets/ReferenceOnly/Stylized Water Shader/`
+- `Assets/ReferenceOnly/StylizedWaterInteractiveUpdate.shadergraph`
+
+The minimum Ameye visual dependency closure is now copied into package-owned
+folders under `Assets/Water25D/Shaders/Stylized/`,
+`Assets/Water25D/Textures/Stylized/`, and
+`Assets/Water25D/Materials/Stylized/`. The copy was performed through Unity's
+`AssetDatabase.CopyAsset`; destination GUIDs are distinct and production assets
+do not serialize references into `Assets/ReferenceOnly/`. The exact mapping and
+adaptations are recorded in
+[`Assets/Water25D/Documentation/Design/PHASE3_REFERENCE_ADAPTATION.md`](Assets/Water25D/Documentation/Design/PHASE3_REFERENCE_ADAPTATION.md).
+
+No licence text or attribution file was supplied inside the authorized source
+folder. This notice records the owner's authorization but does not invent licence
+terms or grant public redistribution rights. Preserve the original purchase or
+licence evidence supplied to the project owner before distributing the package.
+
+The Minions Art graph remains an inspected development reference only. Its
+interaction-camera and global RenderTexture architecture was not copied or
+adopted; Water25D's fixed interaction arrays remain authoritative.
 
 ## Before adding a root `LICENSE`
 

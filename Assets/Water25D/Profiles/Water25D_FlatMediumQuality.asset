@@ -34,6 +34,6 @@ MonoBehaviour:
   _enablePainterlyAgeFrames: 1
   _enableSecondaryAmbientDetail: 1
   _enableStylizedHighlights: 1
-  _enableRefraction: 0
-  _enableCaustics: 0
+  _enableRefraction: 1
+  _enableCaustics: 1
   _topVerticesPerUnit: 8

@@ -1,0 +1,118 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Water25D_AmeyeFront
+  m_Shader: {fileID: 4800000, guid: 90d632586bd048c47afd966de448ac39, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _AmeyeIntersectionFoamTexture:
+        m_Texture: {fileID: 2800000, guid: 72c8eb5c6d9b9de4abb50102daeb3677, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _AmeyeSurfaceFoamTexture:
+        m_Texture: {fileID: 2800000, guid: f4d50746cbb7a0245b7b4a42f6d3424e, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _CausticTexture:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FoamMaskAtlas:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _RingMaskAtlas:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SurfaceDetailTexture:
+        m_Texture: {fileID: 2800000, guid: f4d50746cbb7a0245b7b4a42f6d3424e, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _SurfaceNormalTexture:
+        m_Texture: {fileID: 2800000, guid: 5db107f64d4092142bfd729f1fffa28e, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _WakeMaskAtlas:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _AmbientNormalStrength: 0.1
+    - _BoundaryFoamBreakup: 0.25
+    - _BoundaryFoamIntensity: 0.45
+    - _BoundaryFoamSoftness: 0.04
+    - _BoundaryFoamWidth: 0.025
+    - _CausticDepthFade: 0.7
+    - _CausticIntensity: 0.2
+    - _CausticTextureValid: 0
+    - _CausticsEnabled: 0
+    - _ColorBandInfluence: 0.15
+    - _ColorBandSteps: 4
+    - _FoamReflectionOcclusion: 0.85
+    - _FresnelPower: 4
+    - _FresnelStrength: 0.3
+    - _FrontDepth: 10
+    - _FrontDepthPower: 1.15
+    - _FrontDistortionSourceAvailable: 0
+    - _FrontDistortionStrength: 0.003
+    - _FrontOpacity: 0.9
+    - _HighlightBreakup: 0.25
+    - _HighlightSoftness: 0.2
+    - _HighlightStrength: 0.18
+    - _HighlightThreshold: 0.65
+    - _NormalLayer1Strength: 0.65
+    - _NormalLayer2Strength: 0.25
+    - _PainterlyAgeFrames: 0
+    - _PainterlyMasksEnabled: 0
+    - _StylizedHighlightsEnabled: 1
+    - _SurfaceMode: 0
+    - _TopDepthPower: 0.9
+    - _WakeFadePower: 1.25
+    - _WaterFoamCount: 0
+    - _WaterFoamSoftness: 0.06
+    - _WaterRingCount: 0
+    - _WaterWakeCount: 0
+    - _WaterlineBandWidth: 0.07
+    - _WaveAmplitude: 0.06
+    - _WaveBands: 3
+    - _WaveLength: 3.5
+    - _WaveSpeed: 0.8
+    m_Colors:
+    - _CausticScale: {r: 0.16, g: 0.16, b: 0, a: 0}
+    - _CausticSpeed: {r: 0.018, g: -0.012, b: 0, a: 0}
+    - _CausticTint: {r: 0.78, g: 1, b: 0.82, a: 1}
+    - _FoamColor: {r: 0.78, g: 0.95, b: 1, a: 0.8}
+    - _FresnelTint: {r: 0.75, g: 0.95, b: 1, a: 1}
+    - _FrontDeepColor: {r: 0.025, g: 0.09999997, b: 0.17999998, a: 0.94}
+    - _FrontDistortionTint: {r: 0.8, g: 0.95, b: 1, a: 1}
+    - _FrontSurfaceColor: {r: 0.079999976, g: 0.37999994, b: 0.52, a: 0.84}
+    - _HighlightColor: {r: 0.88, g: 0.97999996, b: 1, a: 1}
+    - _HighlightDirection: {r: -0.3, g: 0.85, b: -0.25, a: 0}
+    - _NormalLayer1Scale: {r: 0.55, g: 0.45, b: 0, a: 0}
+    - _NormalLayer1Speed: {r: 0.035, g: -0.021, b: 0, a: 0}
+    - _NormalLayer2Scale: {r: 1.15, g: 0.9, b: 0, a: 0}
+    - _NormalLayer2Speed: {r: -0.017, g: 0.029, b: 0, a: 0}
+    - _WaterSize: {r: 20, g: 6.5, b: 0, a: 0}
+    - _WaveDirection: {r: 1, g: 0.15, b: 0, a: 0}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1

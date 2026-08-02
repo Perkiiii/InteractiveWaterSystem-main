@@ -1,57 +1,119 @@
-# Water25D Phase 3 Reference Adaptation
+# Water25D Phase 3 reference fork and adaptation
 
-This audit records the authorized local reference inspection for the bounded Phase 3
-stylized-water and reflection presentation slice. The reference assets are development
-inputs only; no source file or texture is required by the package-owned implementation.
+This record supersedes the earlier concept-only Ameye audit. The project owner
+authorized direct use of the local Stylized Water Shader under
+`Assets/ReferenceOnly/Stylized Water Shader/` and the local
+`Assets/ReferenceOnly/StylizedWaterInteractiveUpdate.shadergraph`.
 
-The project owner explicitly authorized inspection and adaptation of the local reference
-trees. Water25D reimplements the selected presentation ideas in its existing shader,
-MaterialPropertyBlock, reflection-group, and fixed-capacity interaction architecture.
+The authorized source files were copied through Unity `AssetDatabase.CopyAsset`.
+The copied graph, subgraphs, and material were then remapped to the new
+package-owned GUIDs. No `.meta` file was copied or hand-authored, and no
+production Water25D asset retains a serialized reference into `Assets/ReferenceOnly/`.
 
-| Feature | Reference source | Exact source asset/function/graph section | Observed implementation | Water25D decision | Reuse directly / adapt / rewrite / reject | Package destination | Required texture or input | Requires depth texture? | Requires opaque or sorting-layer texture? | Top / front / both | Performance implications | Provenance note |
-|---|---|---|---|---|---|---|---|---:|---:|---|---|---|
-| Shallow/deep colour | Ameye | `Shaders/Stylized Water.shader`, `Depth Color`; `Shaders/Shore Color.shadersubgraph` | Position/depth is remapped before colour interpolation. | Keep an always-available local water-depth gradient with optional graphic bands. | Adapt | `Shaders/Water25D_StylizedSurface.hlsl`, top/front shaders, `WaterStyleProfile` | Local XZ/XY UVs and profile colours | No | No | Both | A few scalar operations per fragment; no extra pass. | Logic adapted from the named graph sections; no graph copied. |
-| Water-world coordinate and panning | Ameye | `Shaders/Panning UV.shadersubgraph`; `Shaders/Scene Position.shadersubgraph` | Tiled coordinates are translated by direction, speed, and time. | Use transform-stable local water units and bounded two-layer procedural/optional texture detail. | Adapt | `Water25D_StylizedSurface.hlsl` and profile settings | Local XZ coordinates and `_Time` | No | No | Both | Two bounded samples when optional textures are enabled; procedural fallback is texture-free. | Concept adapted; package owns the coordinate contract. |
-| Layered normals | Ameye | `Shaders/Blended Normals.shadersubgraph`; `Textures/Normals 1.png` | Two scrolling normal contributions are blended into a final surface normal. | Rebuild as subtle two-layer detail with safe procedural fallback and optional package-owned texture references. | Rewrite | `Water25D_StylizedSurface.hlsl`, top shader, `WaterStyleProfile` | Optional normal/detail textures and profile scales/speeds | No | No | Top, shared front inputs | Optional texture reads only in the surface draw; no mesh displacement. | The texture was inspected but not copied; no third-party runtime dependency remains. |
-| Stylized highlights | Ameye | `Shaders/Stylized Water.shader`, `Lighting`; `Shaders/Lighting.hlsl` (`MainLighting`, `AdditionalLighting`) | View/light half-vector specular terms are shaped into toon-like highlights. | Use a restrained view-driven highlight with a configurable direction so it remains valid without a 3D light setup. | Adapt | `Water25D_StylizedSurface.hlsl` and style settings | Final visual normal, view direction, profile highlight controls | No | No | Top / front seam | Fixed arithmetic; no additional light loop or pass. | Lighting concept adapted; the package does not depend on reference lighting code. |
-| Fresnel | Ameye | `Shaders/Stylized Water.shader`, surface/reflection sections | Grazing-angle response increases reflective/tinted contribution. | Apply clamped Fresnel to stylized and planar reflection using the final fragment normal. | Adapt | Shared HLSL and both shaders | View direction and profile strength/power/tint | No | No | Both | A dot, saturate, and bounded power. | Independently integrated with Water25D reflection state. |
-| Foam breakup | Ameye | `Shaders/Stylized Water.shader`, `Surface Foam`; `Textures/Foam 4.png`, `Textures/Foam 5.png` | Foam is shaped by thresholds, overlays, and texture breakup. | Keep analytical boundary/contact/wake masks authoritative and add deterministic procedural breakup; optional interaction atlases remain supported. | Adapt | Shared HLSL, existing `Water25D_InteractionMasks.hlsl`, both shaders | Boundary distance, interaction arrays, optional package texture | No | No | Both | Bounded scalar noise and existing fixed loops; no foam objects or pass. | Reference textures were inspected but not copied. |
-| Intersection/boundary foam | Minions Art | `StylizedWaterInteractiveUpdate.shadergraph`, `Foam Line with noise and cutoffs`, `Foam Line`, `Distorted Noise` | Noisy thresholding shapes a waterline/intersection band. | Implement controlled boundary foam from Water25D geometry bounds and seam; keep body foam separate. | Adapt | Shared HLSL, style profile, top/front shaders | Water UV/local depth, width/softness/breakup | No | No | Both | One bounded edge calculation. | Graph section names were inspected; no Shader Graph dependency is serialized. |
-| Painterly interaction masks | Minions Art | `RenderTexture UV/ Ripples`, `Blending Colors`, `Distorted Noise` | Interaction artwork is projected and blended with colour/foam. | Preserve Phase 2 fixed analytical arrays and optional atlas metadata; masks multiply analytical bounds and never own gameplay placement. | Adapt | Existing interaction-mask include and presentation upload path | Existing ring/foam/wake arrays and optional atlas textures | No | No | Both | Existing fixed-capacity loops; no interaction camera or extra draw. | Water25D-specific ownership and fallback behavior are retained. |
-| Planar reflection | Ameye | `Shaders/Stylized Water.shader`, `Refracted UV`/reflection portions; reflection-related graph nodes | Reflection is projected and distorted by surface inputs. | Consume the existing shared `WaterReflectionManager` texture/matrix and distort/occlude it in the final surface fragment. | Rewrite | Existing reflection manager/module plus shared HLSL and shaders | Immutable reflection texture/matrix, normal and interaction masks | No | No | Top | Existing grouped reflection camera cost; no per-water camera. | Reference reflection ownership is explicitly rejected. |
-| Camera-free stylized reflection | Design adaptation | Ameye `Horizon Color`/depth-colour concepts | Gradient/environment tint can suggest reflection without a texture. | Use analytic horizon/top colours, Fresnel, normal variation, and interaction disturbance. | Rewrite | Shared HLSL and style settings | Profile colours and final visual normal | No | No | Top | Fragment arithmetic only; no camera or RenderTexture. | Water25D-specific implementation. |
-| Refraction | Minions Art | `StylizedWaterInteractiveUpdate.shadergraph`, `Refraction`, `Depth Difference/Refraction fix`, `Scene Color` | Scene colour is sampled through a noise/normal offset with depth safeguards. | Make top opaque-texture and front sorting-layer distortion opt-in, mild, and disabled by default when the input is not confirmed. | Adapt | Both shaders, style/quality profiles, Inspector help | Optional scene-colour input and configured availability flag | Optional | Optional | Both | One conditional scene-colour sample; no resource creation. | No renderer asset is modified automatically. |
-| Caustics | Ameye | `Shaders/Stylized Water.shader`, `Underwater Color`/light detail; inspected texture inventory | Animated texture detail adds underwater light variation. | Support one optional project-owned caustic texture on the front surface with a safe missing-texture fallback. | Adapt | Front shader, style/quality profiles | Optional caustic texture and local XY UV | No | No | Front | One conditional texture sample; no projector/pass/camera. | No reference texture copied. |
-| Gerstner displacement | Ameye | `Shaders/GerstnerWaves.hlsl`, `GerstnerWaves` graph function, `Scripts/GerstnerWaveDisplacement.cs` | Wave displacement and derived normals alter vertices. | Reject for `FlatStylized`; the top remains four vertices and fragment-only animation. | Reject | None | None | No | No | Neither | No displacement workload in flat mode. | Explicitly rejected by the Phase 3 boundary. |
-| Wave-driven buoyancy | Ameye | `Scripts/BuoyantObject.cs` | 3D Rigidbody buoyancy samples displaced wave height. | Reject; Water25D gameplay remains flat 2D buoyancy and never samples GPU height. | Reject | None | None | No | No | Neither | Preserves deterministic gameplay and avoids readback. | Reference script remains untouched. |
-| Orthographic interaction camera / global RT | Minions Art | `RenderTexture UV/ Ripples`, `Scene Color`/projection nodes | A scene-wide projected interaction texture can stamp effects. | Reject; fixed-capacity Water25D interaction arrays are authoritative and no interaction camera/RT is created. | Reject | None | Existing presentation arrays only | No | No | Neither | Avoids extra camera, RT, and draw calls. | `_GlobalEffectRT` and `_OrthographicCamSize` are not package APIs. |
-| Reference reflection camera ownership | Ameye | Graph/package reflection setup and inspected reflection scripts | Reference owns reflection resources at a different material/object boundary. | Reject; WaterReflectionManager remains the sole grouped planar owner. | Reject | Existing `WaterReflectionManager` | Existing group snapshot | No | No | Top | Reflection cost remains proportional to compatible groups. | No reference reflection script is activated or copied. |
-| Reference pipeline/renderer assets | Ameye | `URP-HighFidelity.asset`, `URP-HighFidelity-Renderer.asset` | Reference-specific renderer configuration supports its graph. | Reject; Water25D does not require or modify project renderer assets. | Reject | None | Documented optional project setup only | No | No | Neither | No project-level configuration churn. | Source assets inspected, not copied. |
+## Chosen integration strategy
 
-## Audit inventory
+Water25D uses Option B: existing `SimulatedRipples` materials and controllers
+retain their serialized shader/material contract. The new `FlatStylized` profile
+uses package-owned Ameye-derived top/front materials. The copied Ameye graph and
+its source-default material remain package-owned authoring/provenance assets; the
+runtime materials use the package-owned HLSL compatibility fork of that graph's
+surface responsibilities so Water25D can keep fixed-capacity arrays, one final
+`MaterialPropertyBlock` writer, and the existing reflection snapshot contract.
 
-### Ameye source inspected
+The compatibility fork retains the Ameye colour, panning, layered-normal,
+foam, stylized-lighting, and refraction responsibilities. Water25D-specific
+interaction and reflection code remains in the fork's final fragment path. The
+fork does not use the source package's displacement, buoyancy, camera, renderer,
+or reflection ownership.
 
-- Desktop graph: `Assets/ReferenceOnly/Stylized Water Shader/Shaders/Stylized Water.shadergraph`.
-- Material defaults: `Assets/ReferenceOnly/Stylized Water Shader/Materials/Shader Graphs_Stylized Water.mat`.
-- Subgraphs: `Blended Normals`, `Depth Fade`, `Overlay`, `Panning UV`, `Refracted UV`, `Scene Position`, and `Shore Color`.
-- Custom HLSL: `DistortUV.hlsl`, `HSVLerp.hlsl`, `Lighting.hlsl`, and `GerstnerWaves.hlsl`.
-- Textures: `Normals 1.png`, `Foam 4.png`, and `Foam 5.png`.
-- Scripts: `GerstnerWaveDisplacement.cs` and `BuoyantObject.cs` were inspected and rejected for the flat package path.
-- Renderer assets: `URP-HighFidelity.asset` and `URP-HighFidelity-Renderer.asset` were inspected and rejected as package dependencies.
-- No separate mobile graph, front-only shader, reflection script, or demo-only runtime package was present in this local source tree.
+## Minimum copied dependency closure
 
-### Minions Art source inspected
+| Source file | Source subgraph/function/texture/material | Water25D copied destination | Treatment | Changes made | Reason for changes | Runtime dependency |
+|---|---|---|---|---|---|---|
+| `Assets/ReferenceOnly/Stylized Water Shader/Shaders/Stylized Water.shadergraph` | Desktop `GraphData`; colour, normals, foam, refraction, lighting, and vertex sections | `Assets/Water25D/Shaders/Stylized/Water25D_AmeyeStylizedWater.shadergraph` | Copied and modified | Internal asset GUIDs remapped; the Gerstner custom-function node is renamed `FlatModeNoDisplacement`, uses an inline zero-offset/flat-normal body, and has no source HLSL GUID | Keep the graph as the direct Ameye visual base while removing vertex displacement and the reference HLSL dependency | Authoring/provenance asset; production uses the package-owned HLSL fork below |
+| Same source graph | Copied material defaults | `Assets/Water25D/Materials/Stylized/Water25D_AmeyeSourceDefaults.mat` | Copied and remapped | Shader and the three texture references point only to package-owned copies | Preserve the source's useful defaults for inspection without retaining reference GUIDs | Authoring/comparison asset; not assigned by legacy controllers |
+| `Shaders/Blended Normals.shadersubgraph` | `Blended Normals` | `Shaders/Stylized/SubGraphs/Ameye_BlendedNormals.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Preserve the source normal-layer graph | Referenced by copied graph |
+| `Shaders/Depth Fade.shadersubgraph` | `Depth Fade` | `Shaders/Stylized/SubGraphs/Ameye_DepthFade.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Preserve the source depth shaping | Referenced by copied graph |
+| `Shaders/Overlay.shadersubgraph` | `Overlay` | `Shaders/Stylized/SubGraphs/Ameye_Overlay.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Preserve source overlay blending | Referenced by copied graph |
+| `Shaders/Panning UV.shadersubgraph` | `Panning UV` | `Shaders/Stylized/SubGraphs/Ameye_PanningUV.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Preserve source world/local panning behavior | Referenced by copied graph |
+| `Shaders/Refracted UV.shadersubgraph` | `Refracted UV` | `Shaders/Stylized/SubGraphs/Ameye_RefractedUV.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Preserve source refraction UV structure | Referenced by copied graph |
+| `Shaders/Scene Position.shadersubgraph` | `Scene Position` nested dependency | `Shaders/Stylized/SubGraphs/Ameye_ScenePosition.shadersubgraph` | Copied unchanged | GUID-safe destination remap only | Close the copied depth/refraction graph dependency | Referenced by copied subgraphs |
+| `Shaders/DistortUV.hlsl` | `DistortUV_float` | `Shaders/Stylized/Includes/Ameye_DistortUV.hlsl` | Copied unchanged | New Unity GUID only | Reuse the source refraction/distortion function | Included by `Water25D_AmeyeAdaptation.hlsl` |
+| `Shaders/Lighting.hlsl` | `LightingSpecular`, `MainLighting`, `AdditionalLighting` | `Shaders/Stylized/Includes/Ameye_Lighting.hlsl` | Copied unchanged | New Unity GUID only | Preserve source toon/specular lighting functions | Included by the package adaptation seam |
+| `Textures/Normals 1.png` | Source layered normal map | `Textures/Stylized/Ameye_Normals1.png` | Copied unchanged | New Unity GUID/imported asset | Provide the source normal detail by default | Bound by the new style profile/materials |
+| `Textures/Foam 4.png` | Intersection foam breakup | `Textures/Stylized/Ameye_Foam4.png` | Copied unchanged | New Unity GUID/imported asset | Provide source foam breakup for contact/intersection treatment | Bound by Ameye top/front materials |
+| `Textures/Foam 5.png` | Surface foam breakup | `Textures/Stylized/Ameye_Foam5.png` | Copied unchanged | New Unity GUID/imported asset | Provide source foam breakup for rings/surface treatment | Bound by Ameye top/front materials and flat profile detail input |
+| `Assets/ReferenceOnly/StylizedWaterInteractiveUpdate.shadergraph` | Interactive graph foam, distortion, refraction, and mask ideas | None | Inspected; not copied | No interaction camera, global RT, `_GlobalEffectRT`, or `_OrthographicCamSize` adopted | Water25D's fixed arrays are authoritative | None |
 
-- `Assets/ReferenceOnly/StylizedWaterInteractiveUpdate.shadergraph`.
-- Inspected graph sections include `Depth Colors`, `Normals`, `Foam Line with noise and cutoffs`, `Distorted Noise`, `Blending Colors`, `Lerp between colors and foam color`, `Depth Difference/Refraction fix`, `Refraction`, `RenderTexture UV/ Ripples`, `Scene Color`, and `Scene Depth`.
+The source tree contains no separate mobile graph, front shader, caustic texture,
+gradient asset, reflection script, or independent reflection camera required by
+the desktop graph. Those were recorded during inventory and are intentionally not
+invented or copied. The source Gerstner include, buoyancy script, demo scripts,
+the unused `HSVLerp.hlsl` helper, and URP renderer/pipeline assets are also
+outside the closure.
 
-## Copy/adaptation record
+## Package-owned production fork
 
-| Source path | Source asset | Water25D destination | Treatment | Purpose | Material changes | Import-setting changes | Attribution/licence note |
-|---|---|---|---|---|---|---|---|
-| `Assets/ReferenceOnly/Stylized Water Shader/` | Graphs, subgraphs, HLSL, textures, material, scripts, renderer assets | None; package-owned HLSL/profile/shader code only | Logic adapted or independently rewritten; nothing copied | Calibrate feature selection and rejected architecture | None | None | Inspection and adaptation authorized by the project owner. No supplied source licence terms were added or inferred. |
-| `Assets/ReferenceOnly/StylizedWaterInteractiveUpdate.shadergraph` | Interactive Shader Graph | None; package-owned HLSL/profile/shader code only | Graph sections adapted conceptually | Compare depth, foam, normal, refraction, and ripple presentation | None | None | Inspection and adaptation authorized by the project owner. |
+| Source responsibility | Package destination | Treatment |
+|---|---|---|
+| Graph depth colour and band shaping | `Shaders/Stylized/Water25D_AmeyeTopSurface.shader`, `Water25D_AmeyeFrontSurface.shader`, `Includes/Water25D_AmeyeAdaptation.hlsl` | Adapted to Water25D local surface coordinates and profile values |
+| Graph panning UV and normal animation | Same shaders plus `Water25D_AmeyeAdaptation.hlsl` | Uses the copied `Ameye_DistortUV`/panning contract with safe local UV fallback |
+| Graph layered normals | Same shaders | Source normal copy is sampled through the existing Water25D profile/MPB inputs; no vertex displacement is added in `FlatStylized` |
+| Graph stylized lighting | `Water25D_AmeyeAdaptation.hlsl` and both shaders | Uses the copied source specular function with Water25D's profile direction/strength and no required source light loop |
+| Graph foam breakup | Both shaders | Source Foam 4/Foam 5 samples multiply analytical Water25D boundary/ring/contact/wake masks; missing painterly atlases still use analytical fallback |
+| Graph refraction/distortion | Both shaders | Copied `DistortUV_float` is used only when Water25D's optional input contract is enabled |
+| Water25D fixed interactions | Existing `Water25D_InteractionMasks.hlsl` and the new top/front shaders | Preserved fixed arrays for rings, body-keyed contact foam, wakes, metadata, and analytical fallback |
+| Water25D reflection | Existing `WaterReflectionManager`, `WaterReflectionModule`, `WaterRenderingModule` and new top shader | Shader consumes the published texture, matrix, enabled/fallback state, strength, tint, Fresnel weighting, and interaction distortion; no Ameye camera or reflection pass runs |
 
-Deleting `Assets/ReferenceOnly/` after this implementation would not remove a runtime or
-Inspector dependency from `Assets/Water25D/`.
+`Water25D_AmeyeTopSurface.shader` remains a four-vertex-compatible fragment
+presentation shader: the `FlatStylized` branch never changes vertex positions.
+The front shader reuses the same copied colours, normals, foam, timing, and
+optional caustic contract without forcing horizontal-surface assumptions onto the
+XY front quad.
+
+## Retained, modified, and removed source behavior
+
+Retained from the source implementation:
+
+- shallow/deep colour treatment and graphic banding;
+- local/world-stable panning and animated detail;
+- layered normal animation;
+- Fresnel response and stylized highlights;
+- foam breakup and threshold shaping;
+- optional refraction/distortion and transparency-compatible opacity treatment;
+- copied normal and foam texture defaults.
+
+Modified for Water25D:
+
+- source graph asset references use new package-owned GUIDs;
+- the source displacement node is a zero-offset flat-mode node;
+- top/front shaders use Water25D profile and MPB property IDs;
+- rings, contact foam, wakes, and painterly metadata are evaluated from existing
+  fixed arrays;
+- reflection is sampled from the shared Water25D manager snapshot;
+- optional scene inputs remain source-gated and disabled by default;
+- front presentation uses the same copied visual language without an interaction
+  camera or horizontal-depth assumptions.
+
+Removed or rejected:
+
+- Gerstner vertex displacement;
+- wave-driven 3D buoyancy and any GPU-to-CPU height readback;
+- source reflection scripts/cameras and per-water reflection ownership;
+- demo scripts/scenes and source renderer/pipeline assets;
+- interaction cameras, global interaction RenderTextures,
+  `_GlobalEffectRT`, and `_OrthographicCamSize`;
+- mandatory depth/opaque/sorting-layer texture requirements.
+
+## Provenance and licence note
+
+The project owner explicitly authorized copying, modifying, and using the local
+Ameye assets for this Water25D integration. No licence text or attribution file
+was supplied inside the authorized source folder, so this record does not invent
+licence terms. `THIRD_PARTY_NOTICES.md` records the authorization and the absence
+of supplied terms; the owner should retain any original purchase/licence evidence
+outside this package documentation.
+
+Deleting `Assets/ReferenceOnly/` after this integration must not break Water25D.
+The only remaining `ReferenceOnly` matches under the package are intentional
+provenance and audit documentation.

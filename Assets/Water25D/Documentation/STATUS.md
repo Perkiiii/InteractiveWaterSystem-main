@@ -1,5 +1,64 @@
 # Water25D implementation status
 
+## Phase 3 direct Ameye fork revision — 2026-08-02
+
+The Phase 3 strategy was revised after the project owner authorized direct use of
+the local Ameye Stylized Water Shader. Water25D now contains a package-owned,
+GUID-remapped copy of the minimum desktop visual dependency closure and a
+package-owned HLSL compatibility fork for the new `FlatStylized` materials.
+
+Copied through Unity `AssetDatabase.CopyAsset`:
+
+- `Shaders/Stylized/Water25D_AmeyeStylizedWater.shadergraph`;
+- `Shaders/Stylized/SubGraphs/Ameye_BlendedNormals.shadersubgraph`,
+  `Ameye_DepthFade.shadersubgraph`, `Ameye_Overlay.shadersubgraph`,
+  `Ameye_PanningUV.shadersubgraph`, `Ameye_RefractedUV.shadersubgraph`, and
+  `Ameye_ScenePosition.shadersubgraph`;
+- `Shaders/Stylized/Includes/Ameye_DistortUV.hlsl` and
+  `Ameye_Lighting.hlsl`;
+- `Textures/Stylized/Ameye_Normals1.png`, `Ameye_Foam4.png`, and
+  `Ameye_Foam5.png`;
+- `Materials/Stylized/Water25D_AmeyeSourceDefaults.mat`.
+
+Added production fork assets:
+
+- `Shaders/Stylized/Includes/Water25D_AmeyeAdaptation.hlsl`;
+- `Shaders/Stylized/Water25D_AmeyeTopSurface.shader` and
+  `Water25D_AmeyeFrontSurface.shader`;
+- `Materials/Stylized/Water25D_AmeyeTop.mat` and
+  `Water25D_AmeyeFront.mat`.
+
+`Water25D_FlatStylizedStyle.asset` now defaults to the package-owned Ameye
+materials and copied normal/foam inputs. Existing legacy materials, profiles,
+and serialized `SimulatedRipples` controllers were not migrated. The existing
+`WaterRenderingModule` remains the sole `SetPropertyBlock` writer; the fork
+consumes the existing fixed interaction arrays and shared reflection snapshot.
+The copied graph's Gerstner node is an inline zero-offset flat-mode node, and no
+Gerstner include, buoyancy script, renderer asset, demo asset, interaction
+camera, or global interaction RenderTexture was copied.
+
+Asset validation performed so far:
+
+- Unity `6000.5.4f1` copied/imported the closure and generated new GUIDs;
+- old source GUIDs were absent from the copied graph/material assets;
+- the Ameye top shader, front shader, and copied graph all resolved and reported
+  `supported=True` in the connected Editor;
+- after fixing the copied graph's inline output name, the Unity Console returned
+  zero shader/C# errors and warnings;
+- the package dependency scan returned only intentional documentation matches;
+- full EditMode job `6aafde2646a34589adb2b186b5233d2e` passed 87/87 tests, and
+  full PlayMode job `d1abb64a2c9b42f296248dc16b85d313` passed 13/13 tests;
+- the unsaved comparison captures in `Temp/Water25DPhase3/` covered the legacy
+  Water25D materials, the original Ameye material, and the adapted package fork;
+  the original materials were restored and `Water25D_VisualFlat` remained clean;
+- a paused live Frame Debugger capture reported 27 events, including the
+  `WaterTopMesh | WaterFrontMesh` Renderer2D pass;
+- one live FrameTiming sample reported approximately 6.973 ms CPU and 1.981 ms
+  GPU frame time. This is an observation, not a benchmark or target-device claim.
+
+Clean-project import, full planar-reflection comparison, allocation profiling,
+and target-device validation remain outstanding.
+
 ## Environment
 
 - Unity source of truth: `6000.5.4f1` from `ProjectSettings/ProjectVersion.txt`.
@@ -265,8 +324,8 @@ Exact Phase 2 files changed or created:
 
 Reference assets and portability:
 
-- The authorized local Ameye/Minions reference trees under `Assets/ReferenceOnly/` were inspected for the Phase 3 audit. No reference graph, subgraph, HLSL, texture, shader, material, script, or renderer asset was copied into Water25D.
-- The adaptation and rejection matrix is recorded in `Assets/Water25D/Documentation/Design/PHASE3_REFERENCE_ADAPTATION.md`. Existing `THIRD_PARTY_NOTICES.md` remains unchanged; no source licence terms were inferred.
+- The earlier concept-only Ameye/Minions audit was superseded by the direct-fork revision above. The minimum authorized Ameye graph, subgraphs, HLSL helpers, textures, and source-default material are now copied into package-owned folders; Gerstner, buoyancy, demo, renderer, and interaction-camera assets remain excluded.
+- The exact source-to-destination adaptation matrix is recorded in `Assets/Water25D/Documentation/Design/PHASE3_REFERENCE_ADAPTATION.md`; `THIRD_PARTY_NOTICES.md` records the owner's authorization without inventing source licence terms.
 - `rg -n "Assets/ReferenceOnly" Assets/Water25D` returns only the intentional documentation audit. The broader `Cainos|InteractiveWaterSystem|DemoScenes|Lucid` scan returns documentation-only portability/audit matches, with no runtime or editor dependency.
 
 Phase 2 validation through the connected Unity MCP:
@@ -287,7 +346,7 @@ Starting state was branch `main`, commit `3f8461e84c942a3cbf26fb6b54881c9897a508
 
 Implemented:
 
-- Added the package-owned Phase 3 reference audit and adaptation record. The implementation is independent HLSL/profile/shader code; no reference-only asset is serialized by Water25D.
+- Added the package-owned Phase 3 reference audit and direct-fork adaptation record. Production assets serialize only package-owned copied GUIDs; the intentional `ReferenceOnly` mentions are documentation provenance.
 - Added shared `Water25D_StylizedSurface.hlsl` helpers for safe normals, deterministic procedural detail/noise, shallow/deep depth gradients, restrained colour banding, Fresnel, broad stylized highlights, reflection projection validity, boundary foam, and screen-UV clamping.
 - Extended `WaterStyleProfile` with shallow/deep top colours, depth shaping, calm two-layer normal/detail inputs, Fresnel/highlight controls, camera-free and planar reflection presentation, boundary foam, optional refraction/front distortion source flags, optional caustics, and safe legacy-profile sanitization. Null optional textures are omitted from MPB writes rather than bound.
 - Extended `WaterQualityProfile` with independent secondary-detail, stylized-highlight, refraction, and caustic toggles. Optional source features remain disabled unless both the quality toggle and the style source contract are valid.
@@ -306,7 +365,7 @@ Validation performed:
 - Live Frame Debugger was enabled only after pausing and capturing a frame; it reported 27 events, including the `WaterTopMesh | WaterFrontMesh` renderer pass. It was disabled afterward.
 - Live Profiler captured this Editor/sample frame only: approximately 4.69 ms CPU frame time and 1.53 ms GPU frame time from FrameTiming, with a later Render counter sample of 29 SRP-batcher draws, 11 standard draws, 17,649 triangles, 1.33 ms main-thread, 1.03 ms render-thread, and 1.05 ms GPU frame time. These are observations, not target-device benchmarks.
 - Final active scene inspection reported `isDirty=False`, 10 roots, and no package Console errors. The remaining Console warning was the MCP transport's `WebSocket is not initialised` warning, not a Water25D diagnostic.
-- `git diff --check` and the package dependency scans were run. No project settings, sample scene, legacy/vendor content, or reference source files belong to this slice.
+- `git diff --check` and the package dependency scans were run. No project settings, sample scene, legacy/vendor content, or source-reference files were modified; the new package-owned Ameye closure is the intended Phase 3 asset addition.
 
 Not performed or still required:
 
@@ -371,7 +430,8 @@ The current `Assets/Water25D/Samples/Water25D_VisualValidation.unity` scene does
 - Clean-project copy/import validation and migration tooling.
 - Removal or isolation of the legacy serialized references from the visual-validation sample; the package-root portability claim therefore remains incomplete.
 - Compute simulation backend; the CRT backend remains the first production backend.
-- Full planar-reflection visual comparison, Frame Debugger capture, and allocation profiling.
+- Full planar-reflection visual comparison and allocation profiling; the direct
+  fork slice has a live Frame Debugger capture but no allocation benchmark.
 - Benchmark measurements. The generator is present, but no performance numbers are recorded.
 - Before/after screenshots of the legacy generic inspector were not available, so visual parity is documented by the current authoring captures and workflow description rather than a pixel comparison.
 - A post-correction capture of the six collapsed top-level bars has not yet been produced.

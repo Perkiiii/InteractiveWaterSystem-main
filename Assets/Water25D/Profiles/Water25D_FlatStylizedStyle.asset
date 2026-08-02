@@ -27,8 +27,8 @@ MonoBehaviour:
   _ambientWaveLength: 3.5
   _ambientWaveSpeed: 0.8
   _ambientWaveDirection: {x: 1, y: 0.15}
-  _surfaceNormalTexture: {fileID: 0}
-  _surfaceDetailTexture: {fileID: 0}
+  _surfaceNormalTexture: {fileID: 2800000, guid: 5db107f64d4092142bfd729f1fffa28e, type: 3}
+  _surfaceDetailTexture: {fileID: 2800000, guid: f4d50746cbb7a0245b7b4a42f6d3424e, type: 3}
   _normalLayer1Scale: {x: 0.55, y: 0.45}
   _normalLayer1Speed: {x: 0.035, y: -0.021}
   _normalLayer1Strength: 0.65
@@ -118,5 +118,5 @@ MonoBehaviour:
     FrameCount: 1
     Influence: 1
     RotationVariation: 1
-  _topMaterialTemplate: {fileID: 2100000, guid: 7a535f86bf2ac5d4a8c6be20c105e27f, type: 2}
-  _frontMaterialTemplate: {fileID: 2100000, guid: ac0653dce44e03d4d93782767757ff01, type: 2}
+  _topMaterialTemplate: {fileID: 2100000, guid: 43f3024a60420644abf0118dc1d0a75d, type: 2}
+  _frontMaterialTemplate: {fileID: 2100000, guid: e3f7051c795dc4749a7345f6edcd3d34, type: 2}

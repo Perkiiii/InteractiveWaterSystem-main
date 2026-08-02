@@ -80,13 +80,35 @@ Add optional grayscale atlases for rings, contact foam, and wakes. Support stabl
 
 ### Phase 3 — Stylized water and reflection presentation
 
-Implement the production visual model in package-owned HLSL:
+Use the authorized local Ameye Stylized Water Shader as the direct visual base.
+Copy the minimum desktop graph dependency closure through Unity's
+`AssetDatabase.CopyAsset`, remap copied graph/subgraph/material references to
+new package GUIDs, and keep the source graph recognizable in the package-owned
+authoring assets. The copied graph's displacement node must be converted to a
+flat no-op before it can be used by the flat path.
 
-- Top surface: shallow/deep colour, optional bands, two scrolling detail/normal layers, Fresnel, stylized highlights, decorative foam, refraction controls, stylized/planar reflection blending and distortion, plus painterly rings, contact foam, and wakes.
-- Front surface: shallow-to-deep colour, underwater tint and opacity, optional Camera Sorting Layer Texture distortion, project-owned caustics, animated light shafts, restrained flow detail, top-edge foam, and coherent ring/foam/wake intersections.
-- Reflections: camera-free stylized fallback, shared planar output, Fresnel weighting, normal/ring/wake disturbance, foam occlusion, disabled behaviour, and camera/group/lifecycle validation.
+The production materials use the package-owned HLSL compatibility fork of the
+copied graph's surface responsibilities because Water25D must expose fixed
+interaction arrays and the shared reflection snapshot through one final
+`MaterialPropertyBlock` writer. This fork is not a second visual design: it keeps
+the source colour, panning, layered-normal, foam, stylized-lighting, refraction,
+opacity, and Fresnel behavior, then adds the Water25D interaction/reflection
+contract at the fragment stage. The exact source-to-destination mapping belongs
+in `PHASE3_REFERENCE_ADAPTATION.md`.
 
-`FlatStylized` remains a four-vertex, two-triangle top without vertex displacement. Do not introduce Gerstner displacement, physical-wave buoyancy, mandatory scene-depth foam, mandatory opaque/depth textures, external water packages, or an orthographic interaction-camera stamping pipeline.
+The fork must provide:
+
+- Top surface: source shallow/deep colour, optional bands, two scrolling detail/normal layers, Fresnel, stylized highlights, copied foam breakup, refraction controls, shared stylized/planar reflection blending and distortion, plus fixed-capacity painterly rings, contact foam, and wakes.
+- Front surface: the same copied colour/normal/foam/timing language adapted to the XY front quad, underwater tint and opacity, optional Camera Sorting Layer Texture distortion, optional project-owned caustics, top-edge foam, and coherent ring/foam/wake intersections.
+- Reflections: camera-free stylized fallback, shared planar output, Fresnel weighting, normal/ring/wake disturbance, foam occlusion, disabled behavior, and camera/group/lifecycle validation. The fork must not run the Ameye reflection component or create a second camera/RenderTexture.
+
+The copied Gerstner, buoyancy, demo, renderer/pipeline, and interaction-camera
+systems are excluded. `FlatStylized` remains a four-vertex, two-triangle top
+with fragment-only presentation and no vertex displacement.
+
+Do not introduce physical-wave buoyancy, mandatory scene-depth foam, mandatory
+opaque/depth textures, external water packages, or an orthographic
+interaction-camera stamping pipeline.
 
 ### Phase 4 — FX, tooling, migration, and production validation
 

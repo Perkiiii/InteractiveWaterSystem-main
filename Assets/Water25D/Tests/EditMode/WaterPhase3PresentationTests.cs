@@ -1,3 +1,4 @@
+using System.IO;
 using NUnit.Framework;
 using UnityEngine;
 using Water25D.Rendering;
@@ -53,6 +54,73 @@ namespace Water25D.Tests
             Assert.IsTrue(frontMaterial.HasProperty("_FrontDepthPower"));
             Assert.IsTrue(frontMaterial.HasProperty("_BoundaryFoamIntensity"));
             Assert.IsTrue(frontMaterial.HasProperty("_CausticTexture"));
+        }
+
+        [Test]
+        public void FlatStylizedProfileUsesPackageOwnedAmeyeFork()
+        {
+            var profile = UnityEditor.AssetDatabase.LoadAssetAtPath<WaterStyleProfile>(
+                "Assets/Water25D/Profiles/Water25D_FlatStylizedStyle.asset");
+
+            Assert.IsNotNull(profile);
+
+            var settings = profile.GetSettings();
+            Assert.IsNotNull(profile.TopMaterialTemplate);
+            Assert.IsNotNull(profile.FrontMaterialTemplate);
+            Assert.AreEqual("Water25D/Stylized Ameye Top Surface", profile.TopMaterialTemplate.shader.name);
+            Assert.AreEqual("Water25D/Stylized Ameye Front Surface", profile.FrontMaterialTemplate.shader.name);
+            Assert.IsNotNull(settings.SurfaceNormalTexture);
+            Assert.IsNotNull(settings.SurfaceDetailTexture);
+            Assert.That(
+                UnityEditor.AssetDatabase.GetAssetPath(settings.SurfaceNormalTexture),
+                Does.StartWith("Assets/Water25D/Textures/Stylized/"));
+            Assert.That(
+                UnityEditor.AssetDatabase.GetAssetPath(settings.SurfaceDetailTexture),
+                Does.StartWith("Assets/Water25D/Textures/Stylized/"));
+        }
+
+        [Test]
+        public void AmeyeForkHasNoGerstnerOrReferenceOnlyGraphDependency()
+        {
+            const string graphPath =
+                "Assets/Water25D/Shaders/Stylized/Water25D_AmeyeStylizedWater.shadergraph";
+            Assert.IsTrue(File.Exists(graphPath));
+
+            var graphText = File.ReadAllText(graphPath);
+            Assert.That(graphText, Does.Not.Contain("GerstnerWaves"));
+            Assert.That(graphText, Does.Not.Contain("2c87"));
+            Assert.That(graphText, Does.Not.Contain("ReferenceOnly"));
+            Assert.That(graphText, Does.Not.Contain("_GlobalEffectRT"));
+            Assert.That(graphText, Does.Not.Contain("_OrthographicCamSize"));
+        }
+
+        [Test]
+        public void AmeyeForkShadersResolveWithWater25DRuntimeContract()
+        {
+            var topMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                "Assets/Water25D/Materials/Stylized/Water25D_AmeyeTop.mat");
+            var frontMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                "Assets/Water25D/Materials/Stylized/Water25D_AmeyeFront.mat");
+
+            Assert.IsNotNull(topMaterial);
+            Assert.IsNotNull(frontMaterial);
+            Assert.IsTrue(topMaterial.shader.isSupported);
+            Assert.IsTrue(frontMaterial.shader.isSupported);
+            Assert.IsTrue(topMaterial.HasProperty("_ReflectionTexture"));
+            Assert.IsTrue(topMaterial.HasProperty("_ReflectionEnabled"));
+
+            foreach (var property in new[]
+                     {
+                         "_WaterRingCount",
+                         "_WaterFoamCount",
+                         "_WaterWakeCount",
+                         "_AmeyeIntersectionFoamTexture",
+                         "_AmeyeSurfaceFoamTexture"
+                     })
+            {
+                Assert.IsTrue(topMaterial.HasProperty(property), property);
+                Assert.IsTrue(frontMaterial.HasProperty(property), property);
+            }
         }
 
         [Test]
