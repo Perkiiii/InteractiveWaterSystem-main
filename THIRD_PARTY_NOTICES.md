@@ -25,6 +25,12 @@ Keep `Assets/Cainos/Third Party/Lucid Editor/License.txt` with any redistributio
 
 The original project documentation referenced `https://github.com/daothienphu/InteractiveWaterSystem` for the custom `InteractiveWater` and `SimplePlanarReflection` implementation. Confirm whether this repository is a fork or derivative, preserve any required attribution, and add an appropriate license before publishing the custom code.
 
+## Optional visual development references
+
+Ameye's Stylized Water Shader and Minions Art's Shader Graph Interactive Water are development references only. No explicit public source-redistribution permission was located in the files previously present under `Assets/ReferenceOnly/` or on the linked official tutorial pages. Those source assets are therefore not retained in the tracked repository. This is a record of the licence evidence found, not a legal conclusion.
+
+Developers who are entitled to access those assets may install them locally according to [`Assets/ReferenceOnly/README.md`](Assets/ReferenceOnly/README.md). Locally installed references are not part of Water25D, must not become package dependencies, and must not be included in exports or distributions.
+
 ## Before adding a root `LICENSE`
 
 The repository currently has no root license because the project contains mixed-origin code, shaders, textures, fonts, prefabs, and scenes. Add a root license only after deciding which files you own and which third-party terms apply. A root license should not accidentally relicense the Cainos or Annulus Games content.

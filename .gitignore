@@ -80,3 +80,11 @@ crashlytics-build.properties
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Optional locally installed third-party visual references
+/Assets/ReferenceOnly/*
+!/Assets/ReferenceOnly/README.md
+!/Assets/ReferenceOnly/README.md.meta
+
+# Original downloaded archives kept outside Unity's Assets database
+/ReferencePackages/
